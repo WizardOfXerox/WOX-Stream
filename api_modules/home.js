@@ -40,7 +40,7 @@ module.exports = async (req, res) => {
       const items = rawMedia.map(item => {
         const id = item.jumpAddress ? (item.jumpAddress.match(/id=([^&]+)/) || [])[1] || item.id : item.id;
         const category = (item.category !== undefined && item.category !== null) ? String(item.category) : (item.domainType || '1');
-        const title = item.name || item.title || 'Untitled';
+        const title = item.title || item.name || item.videoName || 'Untitled';
         const coverRaw = item.coverVerticalUrl || item.imageUrl || item.cover || '';
         const cover = fixCoverUrl(coverRaw);
 
