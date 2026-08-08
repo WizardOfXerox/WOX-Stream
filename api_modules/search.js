@@ -219,8 +219,21 @@ module.exports = async (req, res) => {
 
       let rawResults = [];
       let debugInfo = { ok: false, error: null, count: 0, code: null };
-      
-      // 1. Query Loklok keyword search endpoint
+
+      // 1. Query H5 Gateway SSR Scraper first (Unrestricted Global Access)
+      if (keyword && keyword.trim()) {
+        try {
+          const h5Results = await scrapeH5GatewaySearch(keyword);
+          if (h5Results && h5Results.length > 0) {
+            rawResults = h5Results;
+            debugInfo.ok = true;
+            debugInfo.h5First = true;
+            debugInfo.count = rawResults.length;
+          }
+        } catch (_) {}
+      }
+
+      // 2. Query mobile API search endpoint as secondary source
       try {
         const data = await loklokFetch('/search/v1/searchWithKeyWord', {
           method: 'POST',
@@ -232,18 +245,15 @@ module.exports = async (req, res) => {
             searchType: ''
           })
         });
-        if (data) {
-          debugInfo.code = data.code;
-          debugInfo.msg = data.msg;
-        }
         if (data && data.data && Array.isArray(data.data.searchResults)) {
-          rawResults = data.data.searchResults;
-          debugInfo.ok = true;
-          debugInfo.count = rawResults.length;
-          debugInfo.titles = rawResults.map(i => i.name || i.title);
+          data.data.searchResults.forEach(mItem => {
+            if (!rawResults.some(r => String(r.id) === String(mItem.id))) {
+              rawResults.push(mItem);
+            }
+          });
         }
       } catch (err) {
-        debugInfo.error = err.message;
+        if (!debugInfo.error) debugInfo.error = err.message;
       }
 
       // Query words for filtering Loklok items & secondary sources
@@ -253,20 +263,6 @@ module.exports = async (req, res) => {
         const titleLower = String(item.name || item.title || '').toLowerCase();
         return queryWords.length === 0 || queryWords.some(w => titleLower.includes(w));
       });
-
-      // If mobile search returned no items matching keyword, use H5 Gateway SSR Scraper fallback
-      if (filteredLoklok.length === 0 && keyword.trim()) {
-        const h5Results = await scrapeH5GatewaySearch(keyword);
-        if (h5Results.length > 0) {
-          filteredLoklok = h5Results.filter(item => {
-            const titleLower = String(item.name || item.title || '').toLowerCase();
-            return queryWords.length === 0 || queryWords.some(w => titleLower.includes(w));
-          });
-          debugInfo.ok = true;
-          debugInfo.h5Fallback = true;
-          debugInfo.count = filteredLoklok.length;
-        }
-      }
 
       let results = filteredLoklok.map(item => {
         const id = item.id;
