@@ -1,7 +1,7 @@
 const path = require('path');
 const url = require('url');
 
-// Single Vercel Serverless Function entry point
+// Dynamic Handler Gateway for single Vercel Serverless Function entry point
 module.exports = async (req, res) => {
   const reqUrl = req.url || '';
   const parsed = url.parse(reqUrl, true);
@@ -11,7 +11,7 @@ module.exports = async (req, res) => {
   if (pathname.includes('/')) pathname = pathname.split('/')[0];
 
   try {
-    const handlerPath = path.join(__dirname, '..', 'api_modules', `${pathname}.js`);
+    const handlerPath = path.join(__dirname, `${pathname}.js`);
     const handler = require(handlerPath);
     return await handler(req, res);
   } catch (err) {
