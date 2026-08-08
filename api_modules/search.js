@@ -190,27 +190,58 @@ module.exports = async (req, res) => {
         debugInfo.error = err.message;
       }
 
-      // 1b. Upstream Render Singapore Bridge query fallback for Vercel
-      if ((!rawResults || rawResults.length === 0) && !process.env.IS_RENDER) {
+      // 1b. H5 Gateway SSR Scraper fallback for Vercel / Cloud Datacenters (Unrestricted Global Access)
+      if (!rawResults || rawResults.length === 0) {
         try {
-          const upstreamRes = await fetch(`https://wox-stream.onrender.com/api/search?keyword=${encodeURIComponent(keyword.trim())}`, { signal: AbortSignal.timeout(3000) });
-          if (upstreamRes.ok) {
-            const upstreamData = await upstreamRes.json();
-            if (upstreamData && Array.isArray(upstreamData.results) && upstreamData.results.length > 0) {
-              const loklokItems = upstreamData.results.filter(r => r.sourceName === 'Loklok HD' || !r.sourceName);
-              if (loklokItems.length > 0) {
-                rawResults = loklokItems.map(item => ({
-                  id: item.rawId || String(item.id).replace('wox_l_', ''),
-                  name: item.title,
-                  coverVerticalUrl: item.cover,
-                  domainType: item.category === 1 ? 0 : 1,
-                  score: item.score
-                }));
+          const h5Gateways = [
+            `https://h5.decryptplan.com/search?keyword=${encodeURIComponent(keyword.trim())}`,
+            `https://h5.netpop.app/search?keyword=${encodeURIComponent(keyword.trim())}`,
+            `https://h5.loklok.site/search?keyword=${encodeURIComponent(keyword.trim())}`
+          ];
+          for (const gateUrl of h5Gateways) {
+            const h5Res = await fetch(gateUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9'
+              },
+              signal: AbortSignal.timeout(3500)
+            });
+            if (!h5Res.ok) continue;
+            const html = await h5Res.text();
+            const scripts = Array.from(html.matchAll(/<script[^>]*>(.*?)<\/script>/gs)).map(m => m[1]);
+            const dataScript = scripts.find(s => s.includes('snssb') || s.includes('coverVerticalUrl') || s.includes('domainType'));
+            if (dataScript) {
+              const arr = eval(dataScript);
+              const h5Items = [];
+              for (let i = 0; i < arr.length; i++) {
+                const obj = arr[i];
+                if (obj && typeof obj === 'object' && !Array.isArray(obj) && obj.name && obj.coverVerticalUrl && obj.id) {
+                  const name = arr[obj.name];
+                  const cover = arr[obj.coverVerticalUrl] || arr[obj.coverHorizontalUrl];
+                  const id = arr[obj.id];
+                  const domainType = arr[obj.domainType] || obj.domainType;
+                  const score = arr[obj.score] || obj.score || '8.5';
+                  if (typeof name === 'string' && typeof cover === 'string' && id) {
+                    h5Items.push({
+                      id: String(id),
+                      name: name,
+                      coverVerticalUrl: cover,
+                      domainType: (domainType === 1 || domainType === 'TV') ? 1 : 0,
+                      score: String(score)
+                    });
+                  }
+                }
+              }
+              if (h5Items.length > 0) {
+                rawResults = h5Items;
+                debugInfo.ok = true;
+                debugInfo.count = rawResults.length;
+                break;
               }
             }
           }
         } catch (_) {}
-      }  console.error('Loklok searchWithKeyWord fetch failed:', debugInfo.error);
+      }
       
 
       // 2. Also query main catalog search endpoint if keyword search returned limited items
