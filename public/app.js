@@ -3269,6 +3269,8 @@ function initMovieLinkRouter() {
   const urlAreaVal = urlParams.get('area');
   const urlCategoryVal = urlParams.get('category');
 
+  const searchQuery = urlParams.get('q') || urlParams.get('keyword');
+
   if (targetView && ['category', 'history', 'calendar', 'search', 'watchlist', 'home'].includes(targetView)) {
     if (targetView === 'category') {
       if (urlParamsVal !== null) {
@@ -3285,6 +3287,15 @@ function initMovieLinkRouter() {
       }
     }
     switchNav(targetView, false);
+    if (targetView === 'search' && searchQuery) {
+      const searchInput = document.getElementById('search-input');
+      if (searchInput) searchInput.value = searchQuery;
+      performSearch(searchQuery);
+    }
+  } else if (searchQuery) {
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.value = searchQuery;
+    performSearch(searchQuery);
   } else {
     loadHomeFeed();
   }
