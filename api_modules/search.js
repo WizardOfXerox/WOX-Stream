@@ -182,6 +182,7 @@ module.exports = async (req, res) => {
           rawResults = data.data.searchResults;
           debugInfo.ok = true;
           debugInfo.count = rawResults.length;
+          debugInfo.titles = rawResults.map(i => i.name || i.title);
         }
       } catch (err) {
         debugInfo.error = err.message;
