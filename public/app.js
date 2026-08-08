@@ -267,17 +267,72 @@ async function performSearch(query) {
   if (!grid) return;
   grid.innerHTML = '<div class="spinner"></div>';
 
+  let clientLoklokResults = [];
+
+  // Option 3: Client-Side Direct Browser Fetch from User's Real Philippines/Indonesia ISP Connection
+  try {
+    const directRes = await fetch('https://ga-mobile-api.loklok.tv/cms/app/search/v1/searchWithKeyWord', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'lang': 'en',
+        'versioncode': '33',
+        'clienttype': 'android_tem3',
+        'deviceid': '60A3305FDAAC489AAF4C7DD33B1483B4'
+      },
+      body: JSON.stringify({
+        searchKeyWord: query.trim(),
+        size: 50,
+        sort: '',
+        searchType: ''
+      })
+    });
+    if (directRes.ok) {
+      const directData = await directRes.json();
+      if (directData && directData.data && Array.isArray(directData.data.searchResults)) {
+        clientLoklokResults = directData.data.searchResults.map(item => ({
+          id: `wox_l_${item.id}`,
+          rawId: item.id,
+          title: item.name || item.title,
+          cover: typeof fixCoverUrl === 'function' ? fixCoverUrl(item.coverVerticalUrl || item.coverHorizontalUrl || item.cover || '') : (item.coverVerticalUrl || item.coverHorizontalUrl || item.cover || ''),
+          category: item.domainType === 0 ? 1 : (item.domainType || 1),
+          domainType: item.domainType === 0 ? 'MOVIE' : 'TV',
+          score: item.score || '8.5',
+          sourceName: 'Loklok HD'
+        }));
+      }
+    }
+  } catch (_) {
+    // Falls back seamlessly to server API route
+  }
+
   try {
     const res = await fetch(`/api/search?keyword=${encodeURIComponent(query)}&token=${encodeURIComponent(state.token)}`);
     const data = await res.json();
-    if (!data.results || data.results.length === 0) {
+    let combinedResults = [...clientLoklokResults];
+
+    if (data && Array.isArray(data.results)) {
+      data.results.forEach(item => {
+        if (!combinedResults.some(c => (c.title || '').toLowerCase() === (item.title || '').toLowerCase())) {
+          combinedResults.push(item);
+        }
+      });
+    }
+
+    if (combinedResults.length === 0) {
       grid.innerHTML = `<p style="color:var(--text-muted);grid-column:1/-1;text-align:center;padding:3rem;">No results found for "${escapeHtml(query)}".</p>`;
       return;
     }
-    const filtered = filterContentBySettings(data.results);
+    const filtered = filterContentBySettings(combinedResults);
     grid.innerHTML = filtered.map(item => renderLoklokCard(item)).join('');
   } catch (err) {
-    grid.innerHTML = `<p style="color:var(--text-muted);grid-column:1/-1;">Search failed: ${err.message}</p>`;
+    if (clientLoklokResults.length > 0) {
+      const filtered = filterContentBySettings(clientLoklokResults);
+      grid.innerHTML = filtered.map(item => renderLoklokCard(item)).join('');
+    } else {
+      grid.innerHTML = `<p style="color:var(--text-muted);grid-column:1/-1;">Search failed: ${err.message}</p>`;
+    }
   }
 }
 
