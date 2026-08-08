@@ -67,9 +67,13 @@ module.exports = async (req, res) => {
             fetch(`${LOKLOK_API_BASE}/search/v1/searchWithKeyWord`, {
               method: 'POST',
               headers: { ...headers, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ searchKeyWord: keyword.trim(), size: 10, sort: '', searchType: '' })
+              body: JSON.stringify({ searchKeyWord: keyword.trim(), size: 10, sort: '', searchType: '' }),
+              signal: AbortSignal.timeout(4000)
             }).then(r => r.json()),
-            fetch(`https://narto-drama.com/search?q=${encodeURIComponent(keyword.trim())}&limit=10&lang=en-US`, { headers: getNartoHeaders() }).then(r => r.json())
+            fetch(`https://narto-drama.com/search?q=${encodeURIComponent(keyword.trim())}&limit=10&lang=en-US`, {
+              headers: getNartoHeaders(),
+              signal: AbortSignal.timeout(4000)
+            }).then(r => r.json())
           ]);
 
           if (loklokRes.status === 'fulfilled' && loklokRes.value && loklokRes.value.data && loklokRes.value.data.searchResults) {
@@ -132,7 +136,8 @@ module.exports = async (req, res) => {
           size: 30,
           sort: '',
           searchType: ''
-        })
+        }),
+        signal: AbortSignal.timeout(5000)
       });
       const data = await searchRes.json();
 
@@ -159,7 +164,7 @@ module.exports = async (req, res) => {
       try {
         const nartoUrl = `https://narto-drama.com/search?q=${encodeURIComponent(keyword.trim())}&limit=20&lang=en-US`;
         const nartoHeaders = getNartoHeaders();
-        const nartoRes = await fetch(nartoUrl, { headers: nartoHeaders });
+        const nartoRes = await fetch(nartoUrl, { headers: nartoHeaders, signal: AbortSignal.timeout(4000) });
         const nartoData = await nartoRes.json();
         if (nartoData && Array.isArray(nartoData.items)) {
           nartoData.items.forEach(nItem => {
@@ -421,7 +426,8 @@ module.exports = async (req, res) => {
       let categoryRes = await fetch(`${LOKLOK_API_BASE}/search/v1/search?page=${page}`, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(5000)
       });
       let data = await categoryRes.json();
 
