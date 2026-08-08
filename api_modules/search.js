@@ -288,13 +288,14 @@ module.exports = async (req, res) => {
           const t = String(item.title || '').toLowerCase();
           const tClean = t.replace(/[^a-z0-9\s]/g, '');
           let base = 0;
-          if (t === qLower || tClean === qLower) base = 10;
-          else if (t.startsWith(qLower)) base = 8;
-          else if (wordRegex.test(tClean)) base = 6;
-          else if (t.includes(qLower)) base = 4;
+          if (t === qLower || tClean === qLower) base = 100;
+          else if (t.startsWith(qLower)) base = 80;
+          else if (wordRegex.test(tClean)) base = 60;
+          else if (t.includes(qLower)) base = 40;
 
-          // Bonus for official Loklok HD main catalog items
-          const sourceBonus = (!item.isNarto && item.sourceName === 'Loklok HD') ? 5 : 0;
+          // Extra bonus for official Loklok HD main catalog titles
+          const isLoklok = !item.isNarto && !item.isViva && item.sourceName === 'Loklok HD';
+          const sourceBonus = isLoklok ? 30 : 0;
           return base + sourceBonus;
         };
 
