@@ -253,12 +253,10 @@ module.exports = async (req, res) => {
         } catch (_) {}
       }
 
-      // Filter out irrelevant third-party results that don't match any search keyword terms
+      // Strict Keyword Filtering: Every item must contain at least one query word in its title
       const queryWords = keyword.trim().toLowerCase().split(/\s+/).filter(w => w.length > 1);
       if (queryWords.length > 0) {
         results = results.filter(item => {
-          // Always keep official Loklok HD search results
-          if (!item.isNarto && item.sourceName === 'Loklok HD') return true;
           const tLower = String(item.title || '').toLowerCase();
           return queryWords.some(w => tLower.includes(w));
         });
