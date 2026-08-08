@@ -274,16 +274,22 @@ module.exports = async (req, res) => {
         const aClean = aTitle.replace(/[^a-z0-9\s]/g, '');
         const bClean = bTitle.replace(/[^a-z0-9\s]/g, '');
 
-        const getScore = (t, tClean) => {
-          if (t === qLower || tClean === qLower) return 10;
-          if (t.startsWith(qLower)) return 8;
-          if (wordRegex.test(tClean)) return 6;
-          if (t.includes(qLower)) return 4;
-          return 0;
+        const getScore = (item) => {
+          const t = String(item.title || '').toLowerCase();
+          const tClean = t.replace(/[^a-z0-9\s]/g, '');
+          let base = 0;
+          if (t === qLower || tClean === qLower) base = 10;
+          else if (t.startsWith(qLower)) base = 8;
+          else if (wordRegex.test(tClean)) base = 6;
+          else if (t.includes(qLower)) base = 4;
+
+          // Bonus for official Loklok HD main catalog items
+          const sourceBonus = (!item.isNarto && item.sourceName === 'Loklok HD') ? 5 : 0;
+          return base + sourceBonus;
         };
 
-        const aScore = getScore(aTitle, aClean);
-        const bScore = getScore(bTitle, bClean);
+        const aScore = getScore(a);
+        const bScore = getScore(b);
 
         if (aScore !== bScore) return bScore - aScore;
         return 0;
