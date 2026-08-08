@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 
-const LOKLOK_API_BASE = 'https://ga-mobile-api.loklok.tv/cms/app';
+const LOKLOK_API_BASE = process.env.LOKLOK_PROXY_URL || 'https://ga-mobile-api.loklok.tv/cms/app';
 const MASK_SECRET = process.env.WOX_MASK_SECRET || 'wox-stream-gateway-secret-2026-v1';
 
 // Dynamic User-Agent Pool
@@ -140,19 +140,57 @@ function fixCoverUrl(url) {
   }
 }
 
+const nodeFetch = require('node-fetch');
+const { HttpsProxyAgent } = require('https-proxy-agent');
+
+const FAST_ASIAN_PROXIES = [
+  'http://43.133.128.153:16012',
+  'http://43.109.48.180:9999',
+  'http://103.82.20.76:8080'
+];
+
 async function loklokFetch(endpoint, options = {}) {
   const url = endpoint.startsWith('http') ? endpoint : `${LOKLOK_API_BASE}${endpoint}`;
+  const isSearch = endpoint.includes('searchWithKeyWord') || endpoint.includes('search');
   const defaultHeaders = getLoklokHeaders(options.token || '');
   const headers = { ...defaultHeaders, ...(options.headers || {}) };
-  const fetchOpts = { method: options.method || 'GET', headers, body: options.body, signal: AbortSignal.timeout(5000) };
-  
+
+  // 1. Direct fetch attempt with 1.5s timeout
   try {
-    const response = await fetch(url, fetchOpts);
-    if (response.ok) {
-      const data = await response.json();
-      if (data) return data;
+    const res = await nodeFetch(url, {
+      method: options.method || 'GET',
+      headers,
+      body: options.body,
+      timeout: 1500
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const count = (data && data.data && Array.isArray(data.data.searchResults)) ? data.data.searchResults.length : 0;
+      if (!isSearch || count > 1) {
+        return data;
+      }
     }
   } catch (_) {}
+
+  // 2. Fast Asian Proxy fallback via HttpsProxyAgent (1.8s timeout per proxy)
+  for (const proxyUrl of FAST_ASIAN_PROXIES) {
+    try {
+      const agent = new HttpsProxyAgent(proxyUrl);
+      const res = await nodeFetch(url, {
+        method: options.method || 'GET',
+        headers,
+        body: options.body,
+        agent,
+        timeout: 1800
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.data && Array.isArray(data.data.searchResults) && data.data.searchResults.length > 0) {
+          return data;
+        }
+      }
+    } catch (_) {}
+  }
 
   return { code: '00000', data: { searchResults: [] } };
 }
