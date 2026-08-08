@@ -86,7 +86,11 @@ function getLoklokHeaders(token = '') {
     'x-real-ip': ip,
     'cf-connecting-ip': ip,
     'true-client-ip': ip,
-    'fastly-client-ip': ip
+    'fastly-client-ip': ip,
+    'x-originating-ip': ip,
+    'x-remote-ip': ip,
+    'x-remote-addr': ip,
+    'forwarded': `for=${ip};proto=https`
   };
 
   if (cleanToken) {
