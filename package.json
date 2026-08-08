@@ -1,0 +1,16 @@
+{
+  "name": "wox-stream",
+  "version": "1.0.0",
+  "description": "WOX-Stream - Premium Modern Streaming Web Application & Player",
+  "main": "api/home.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "node-fetch": "^2.7.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,563 @@
+const { getLoklokHeaders, getNartoHeaders, setCorsHeaders, fixCoverUrl, LOKLOK_API_BASE, sanitizeToken, maskId } = require('./_utils');
+
+function cleanTitle(t) {
+  return String(t || '')
+    .replace(/^\[narto\]\s*/i, '')
+    .replace(/\s*\((?:india|korea|japan|philippines|china|indonesia|thailand|vietnam|us|uk|dubbed|dubbing|sub|uncensored|hd)\)/gi, '')
+    .trim();
+}
+
+function normalizeTitle(t) {
+  return cleanTitle(t).toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function deduplicateResults(items) {
+  const map = new Map();
+  items.forEach(item => {
+    const norm = normalizeTitle(item.title);
+    if (!norm) return;
+    const currentMirror = {
+      id: item.id,
+      sourceKey: item.sourceKey || (item.isNarto ? 'narto' : (item.isViva ? 'viva' : 'loklok')),
+      sourceName: item.sourceName || (item.isNarto ? 'Narto Drama' : (item.isViva ? 'Viva' : 'Loklok HD')),
+      category: item.category
+    };
+
+    if (!map.has(norm)) {
+      map.set(norm, {
+        ...item,
+        title: cleanTitle(item.title),
+        mirrors: [currentMirror]
+      });
+    } else {
+      const existing = map.get(norm);
+      if (!existing.mirrors.some(m => m.id === item.id)) {
+        existing.mirrors.push(currentMirror);
+      }
+    }
+  });
+  return Array.from(map.values());
+}
+
+module.exports = async (req, res) => {
+  setCorsHeaders(res);
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  try {
+    const rawToken = (req.headers ? req.headers.token : '') || req.query.token || '';
+    const token = sanitizeToken(rawToken);
+    const headers = getLoklokHeaders(token);
+
+    let keyword = req.query.q || req.query.keyword || '';
+    if (req.body && req.body.keyword) keyword = req.body.keyword;
+
+    const reqSource = (req.query.source || (req.body && req.body.source) || '').toLowerCase();
+    const page = req.query.page || 0;
+    const pageSize = 12;
+
+    let vivaItems = [];
+
+    const isFast = req.query.fast === 'true';
+
+    if (keyword && keyword.trim()) {
+      if (isFast) {
+        let fastResults = [];
+        try {
+          const [loklokRes, nartoRes] = await Promise.allSettled([
+            fetch(`${LOKLOK_API_BASE}/search/v1/searchWithKeyWord`, {
+              method: 'POST',
+              headers: { ...headers, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ searchKeyWord: keyword.trim(), size: 10, sort: '', searchType: '' })
+            }).then(r => r.json()),
+            fetch(`https://narto-drama.com/search?q=${encodeURIComponent(keyword.trim())}&limit=10&lang=en-US`, { headers: getNartoHeaders() }).then(r => r.json())
+          ]);
+
+          if (loklokRes.status === 'fulfilled' && loklokRes.value && loklokRes.value.data && loklokRes.value.data.searchResults) {
+            loklokRes.value.data.searchResults.forEach(item => {
+              fastResults.push({
+                id: maskId('loklok', item.id),
+                category: String(item.category || item.domainType || '1'),
+                title: item.name || item.title || 'Untitled',
+                cover: fixCoverUrl(item.coverVerticalUrl || item.imageUrl || item.cover || ''),
+                score: item.score || null,
+                domainType: item.domainType,
+                sourceName: 'Loklok HD'
+              });
+            });
+          }
+
+          if (nartoRes.status === 'fulfilled' && nartoRes.value && Array.isArray(nartoRes.value.items)) {
+            nartoRes.value.items.forEach(nItem => {
+              let slug = '';
+              if (nItem.url) {
+                const match = nItem.url.match(/\/detail\/watch\/([^?#]+)/);
+                if (match) slug = match[1];
+              }
+              let cover = nItem.poster_url || '';
+              if (cover.startsWith('/')) cover = 'https://narto-drama.com' + cover;
+              const targetId = slug || nItem.id;
+              const cleanTitle = (nItem.title || '').replace(/^\[narto\]\s*/i, '').trim();
+
+              if (targetId && cleanTitle) {
+                fastResults.push({
+                  id: maskId('narto', targetId),
+                  category: '1',
+                  title: cleanTitle,
+                  cover: cover,
+                  score: '9.0',
+                  domainType: 'SHORT',
+                  sourceName: 'Narto Drama',
+                  isNarto: true
+                });
+              }
+            });
+          }
+        } catch (_) {}
+
+        fastResults = deduplicateResults(fastResults);
+        return res.status(200).json({
+          success: true,
+          results: fastResults,
+          total: fastResults.length,
+          page: 0
+        });
+      }
+
+      // Full search path
+      const searchRes = await fetch(`${LOKLOK_API_BASE}/search/v1/searchWithKeyWord`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          searchKeyWord: keyword.trim(),
+          size: 30,
+          sort: '',
+          searchType: ''
+        })
+      });
+      const data = await searchRes.json();
+
+      const rawResults = (data.data && data.data.searchResults) ? data.data.searchResults : [];
+      let results = rawResults.map(item => {
+        const id = item.id;
+        const category = item.category || item.domainType || '1';
+        const title = item.name || item.title || 'Untitled';
+        const coverRaw = item.coverVerticalUrl || item.imageUrl || item.cover || '';
+        const cover = fixCoverUrl(coverRaw);
+
+        return {
+          id: maskId('loklok', id),
+          category: String(category),
+          title: title,
+          cover: cover,
+          score: item.score || null,
+          domainType: item.domainType,
+          sourceName: 'Loklok HD'
+        };
+      });
+
+      // Also search Narto Drama for short dramas matching keyword, appending after Loklok items
+      try {
+        const nartoUrl = `https://narto-drama.com/search?q=${encodeURIComponent(keyword.trim())}&limit=20&lang=en-US`;
+        const nartoHeaders = getNartoHeaders();
+        const nartoRes = await fetch(nartoUrl, { headers: nartoHeaders });
+        const nartoData = await nartoRes.json();
+        if (nartoData && Array.isArray(nartoData.items)) {
+          nartoData.items.forEach(nItem => {
+            let slug = '';
+            if (nItem.url) {
+              const match = nItem.url.match(/\/detail\/watch\/([^?#]+)/);
+              if (match) slug = match[1];
+            }
+            let cover = nItem.poster_url || '';
+            if (cover.startsWith('/')) cover = 'https://narto-drama.com' + cover;
+            const targetId = slug || nItem.id;
+            const cleanTitle = (nItem.title || '').replace(/^\[narto\]\s*/i, '').trim();
+
+            if (targetId && cleanTitle) {
+              results.push({
+                id: maskId('narto', targetId),
+                category: '1',
+                title: cleanTitle,
+                cover: cover,
+                score: '9.0',
+                domainType: 'SHORT',
+                sourceName: 'Narto Drama',
+                isNarto: true
+              });
+            }
+          });
+        }
+      } catch (_) {}
+
+      // Append matched Viva items
+      if (vivaItems.length > 0) {
+        vivaItems.forEach(vItem => {
+          results.push({
+            id: vItem.id,
+            category: String(vItem.category || 1),
+            title: vItem.title,
+            cover: vItem.cover,
+            score: vItem.score || '9.0',
+            domainType: 'MOVIE',
+            sourceName: vItem.sourceName,
+            sourceKey: vItem.sourceKey,
+            isViva: true
+          });
+        });
+      }
+
+      // Search Anime
+      try {
+        const animeModule = require('./anime-provider');
+        const animeRes = await animeModule.searchAnime(keyword.trim());
+        if (animeRes && Array.isArray(animeRes)) {
+          results.push(...animeRes);
+        }
+      } catch (_) {}
+
+      // Search Asian Drama
+      try {
+        const dramaModule = require('./asian-drama');
+        const dramaRes = await dramaModule.searchDrama(keyword.trim());
+        if (dramaRes && Array.isArray(dramaRes)) {
+          results.push(...dramaRes);
+        }
+      } catch (_) {}
+
+      // Search Classics
+      try {
+        const classicsModule = require('./classics');
+        const classicsRes = await classicsModule.searchClassics(keyword.trim());
+        if (classicsRes && Array.isArray(classicsRes)) {
+          results.push(...classicsRes);
+        }
+      } catch (_) {}
+
+      // Search Adult (if allowAdult === 'true')
+      const allowAdultParam = req.query.allowAdult || (req.headers ? req.headers.allowadult : '') || '';
+      if (allowAdultParam === 'true') {
+        try {
+          const hstreamModule = require('./hstream');
+          const hmamaModule = require('./hentaimama');
+          const [hsItems, hmItems] = await Promise.all([
+            hstreamModule.fetchHstreamCatalog(1, 'view-count', keyword.trim()),
+            hmamaModule.fetchHentaiMamaCatalog(1, keyword.trim())
+          ]);
+          if (hsItems && Array.isArray(hsItems)) results.push(...hsItems);
+          if (hmItems && Array.isArray(hmItems)) results.push(...hmItems);
+        } catch (_) {}
+      }
+
+      results = deduplicateResults(results);
+      return res.status(200).json({ success: true, results });
+
+    } else {
+      // Category multi-filter search API
+      const reqSource = (req.query.source || (req.body && req.body.source) || '').toLowerCase();
+      const pageSize = 12;
+
+      if (reqSource === 'vivaone' || reqSource === 'vivamax' || reqSource === 'vivamb' || reqSource === 'viva moviebox') {
+        const sourceMap = { vivaone: 'vivaone', vivamax: 'vivamax', vivamb: 'vivamoviebox', 'viva moviebox': 'vivamoviebox' };
+        const targetSrc = sourceMap[reqSource] || reqSource;
+        const pageIdx = parseInt(page, 10) || 0;
+
+        let vivaCatalog = [];
+        try {
+          const vivaHandler = require('./viva');
+          const vivaReq = { query: { action: 'catalog', source: targetSrc } };
+          const vivaRes = {
+            status: function() { return this; },
+            json: function(data) { if (data && data.items) vivaCatalog = data.items; }
+          };
+          await vivaHandler(vivaReq, vivaRes);
+        } catch (_) {}
+
+        const startIndex = pageIdx * pageSize;
+        const pageSlice = vivaCatalog.slice(startIndex, startIndex + pageSize);
+
+        let results = pageSlice.map(vItem => ({
+          id: vItem.id,
+          category: String(vItem.category || 1),
+          title: vItem.title,
+          cover: vItem.cover,
+          score: vItem.score || '9.0',
+          domainType: 'MOVIE',
+          sourceName: vItem.sourceName,
+          sourceKey: vItem.sourceKey,
+          isViva: true
+        }));
+
+        let nextCursor = startIndex + pageSize < vivaCatalog.length ? `${reqSource}_page_${pageIdx + 1}` : '';
+        return res.status(200).json({ success: true, results, nextCursor });
+      } else if (reqSource === 'narto') {
+        const pageIdx = parseInt(page, 10) || 0;
+        const subTypeFilter = req.query.params || req.query.category || '';
+        let nartoItems = [];
+        try {
+          const nartoFetch = require('./narto');
+          const nartoReq = { url: `/catalog`, query: { q: subTypeFilter } };
+          const nartoRes = {
+            status: function() { return this; },
+            json: function(data) { if (data && data.items) nartoItems = data.items; }
+          };
+          await nartoFetch(nartoReq, nartoRes);
+        } catch (_) {}
+
+        // Fallback: If filtered list is small, fetch default catalog items to fill page
+        if (nartoItems.length < pageSize) {
+          try {
+            const nartoFetch = require('./narto');
+            const fallbackReq = { url: `/catalog`, query: { q: '' } };
+            const fallbackRes = {
+              status: function() { return this; },
+              json: function(data) {
+                if (data && Array.isArray(data.items)) {
+                  nartoItems.push(...data.items);
+                }
+              }
+            };
+            await nartoFetch(fallbackReq, fallbackRes);
+          } catch (_) {}
+        }
+
+        const startIndex = (pageIdx * pageSize) % Math.max(1, nartoItems.length);
+        let pageSlice = nartoItems.slice(startIndex, startIndex + pageSize);
+
+        if (pageSlice.length < pageSize && nartoItems.length > 0) {
+          pageSlice = pageSlice.concat(nartoItems.slice(0, pageSize - pageSlice.length));
+        }
+
+        let results = pageSlice.map(nItem => {
+          const cleanTitle = (nItem.title || '').replace(/^\[narto\]\s*/i, '').trim();
+          return {
+            id: maskId('narto', nItem.id),
+            category: '1',
+            title: cleanTitle,
+            cover: nItem.cover,
+            score: '9.0',
+            domainType: 'SHORT',
+            sourceName: 'Narto Drama',
+            sourceKey: 'narto',
+            isNarto: true
+          };
+        });
+
+        let nextCursor = `narto_page_${pageIdx + 1}`;
+        return res.status(200).json({ success: true, results, nextCursor });
+      } else if (reqSource === 'hollywood') {
+        let hwItems = [];
+        try {
+          const hwModule = require('./hollywood');
+          const hwRes = await hwModule.fetchHollywoodShelves();
+          const list = Array.isArray(hwRes) ? hwRes : (hwRes && hwRes.shelves ? hwRes.shelves : []);
+          list.forEach(s => hwItems.push(...(s.items || [])));
+        } catch (_) {}
+        return res.status(200).json({ success: true, results: hwItems, nextCursor: '' });
+      } else if (reqSource === 'anime') {
+        let aniItems = [];
+        try {
+          const aniModule = require('./anime-provider');
+          const aniRes = await aniModule.fetchAnimeShelves();
+          const list = Array.isArray(aniRes) ? aniRes : (aniRes && aniRes.shelves ? aniRes.shelves : []);
+          list.forEach(s => aniItems.push(...(s.items || [])));
+        } catch (_) {}
+        return res.status(200).json({ success: true, results: aniItems, nextCursor: '' });
+      } else if (reqSource === 'drama') {
+        let dramaItems = [];
+        try {
+          const dramaModule = require('./asian-drama');
+          const dramaRes = await dramaModule.fetchDramaShelves();
+          const list = Array.isArray(dramaRes) ? dramaRes : (dramaRes && dramaRes.shelves ? dramaRes.shelves : []);
+          list.forEach(s => dramaItems.push(...(s.items || [])));
+        } catch (_) {}
+        return res.status(200).json({ success: true, results: dramaItems, nextCursor: '' });
+      } else if (reqSource === 'classics') {
+        let classicsItems = [];
+        try {
+          const classicsModule = require('./classics');
+          const p = pageIdx + 1;
+          classicsItems = await classicsModule.fetchClassicsPaginated(p, 'feature_films');
+        } catch (_) {}
+        const nextCursor = classicsItems.length > 0 ? `classics_page_${pageIdx + 1}` : '';
+        return res.status(200).json({ success: true, results: classicsItems, nextCursor });
+      } else if (reqSource === 'adult' || reqSource === 'hstream' || reqSource === 'hentaimama') {
+        let adultItems = [];
+        try {
+          const hstreamModule = require('./hstream');
+          const hmamaModule = require('./hentaimama');
+          const p = pageIdx + 1;
+          const [hsItems, hmItems] = await Promise.all([
+            hstreamModule.fetchHstreamCatalog(p, 'view-count', ''),
+            hmamaModule.fetchHentaiMamaCatalog(p, '')
+          ]);
+          if (hsItems) adultItems.push(...hsItems);
+          if (hmItems) adultItems.push(...hmItems);
+        } catch (_) {}
+        adultItems = deduplicateResults(adultItems);
+        const nextCursor = adultItems.length > 0 ? `adult_page_${pageIdx + 1}` : '';
+        return res.status(200).json({ success: true, results: adultItems, nextCursor });
+      }
+
+      const rawParams = req.query.params || (req.body && req.body.params) || '';
+      const params = rawParams.trim() ? rawParams.trim() : 'MOVIE,TV,VARIETY,COMIC,DOCUMENTARY,TVSPECIAL,MINISERIES,SETI,TALK';
+      
+      const area = req.query.area || (req.body && req.body.area) || '';
+      const category = req.query.category || (req.body && req.body.category) || '';
+      const year = req.query.year || (req.body && req.body.year) || '';
+      const order = req.query.order || (req.body && req.body.order) || 'count';
+
+      const sortCursor = req.query.sort || (req.body && req.body.sort) || '';
+
+      const payload = {
+        size: 30,
+        params: params,
+        area: area,
+        category: category,
+        year: year,
+        order: order,
+        sort: sortCursor
+      };
+
+      let categoryRes = await fetch(`${LOKLOK_API_BASE}/search/v1/search?page=${page}`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      let data = await categoryRes.json();
+
+      let rawResults = (data.data && data.data.searchResults) ? data.data.searchResults : [];
+
+      // Fallback: If strict category/sort returned fewer than 6 items for specialized types, try fallback query
+      if (rawResults.length < 6 && (category || area || order === 'score')) {
+        const fallbackPayload = {
+          ...payload,
+          category: '', // clear strict genre category restriction
+          order: 'count' // default to popularity count
+        };
+        const fallbackRes = await fetch(`${LOKLOK_API_BASE}/search/v1/search?page=${page}`, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify(fallbackPayload)
+        });
+        const fallbackData = await fallbackRes.json();
+        if (fallbackData.data && Array.isArray(fallbackData.data.searchResults) && fallbackData.data.searchResults.length > rawResults.length) {
+          rawResults = fallbackData.data.searchResults;
+        }
+      }
+
+        let results = rawResults.map(item => ({
+          id: maskId('loklok', item.id),
+          category: String(item.category || item.domainType || '1'),
+          title: item.name || item.title || 'Untitled',
+          cover: fixCoverUrl(item.coverVerticalUrl || item.imageUrl || item.cover || ''),
+          score: item.score || null,
+          domainType: item.domainType,
+          sort: item.sort || '',
+          sourceName: 'Loklok HD',
+          sourceKey: 'loklok'
+        }));
+
+        // Only append extra sources when no strict conflicting regional/genre filter is selected!
+        const hasStrictArea = !!area;
+        const hasStrictCategory = !!category;
+
+        if (!reqSource || reqSource === 'all') {
+          let extraItems = [];
+          const isAsianRegion = !hasStrictArea || ['53', '44', '57', '32,56', '41', '34', '40'].includes(area);
+          const isGeneralCatalog = !hasStrictArea && !hasStrictCategory;
+          const allowAdultParam = req.query.allowAdult || (req.headers ? req.headers.allowadult : '') || '';
+
+          const subTasks = [];
+
+          // Task 1: Narto Asian Dramas
+          if (isAsianRegion) {
+            subTasks.push((async () => {
+              try {
+                const nartoFetch = require('./narto');
+                let nartoItems = [];
+                const genreQuery = category || (area === '53' ? 'korea' : '');
+                const nartoReq = { url: `/catalog`, query: { q: genreQuery } };
+                const nartoRes = {
+                  status: function() { return this; },
+                  json: function(data) { if (data && data.items) nartoItems = data.items; }
+                };
+                await Promise.race([
+                  nartoFetch(nartoReq, nartoRes),
+                  new Promise(resolve => setTimeout(resolve, 1200))
+                ]);
+                const nartoSlice = nartoItems.slice((page * 6) % Math.max(1, nartoItems.length - 6), ((page * 6) % Math.max(1, nartoItems.length - 6)) + 6);
+                return nartoSlice.map(nItem => ({
+                  id: maskId('narto', nItem.id),
+                  category: '1',
+                  title: String(nItem.title || '').replace(/^\[narto\]\s*/i, '').trim(),
+                  cover: nItem.cover,
+                  score: '9.0',
+                  domainType: 'SHORT',
+                  sourceName: 'Narto Drama',
+                  sourceKey: 'narto',
+                  isNarto: true
+                }));
+              } catch (_) { return []; }
+            })());
+          }
+
+          // Task 2: Classics Archive
+          if (isGeneralCatalog) {
+            subTasks.push((async () => {
+              try {
+                const classicsModule = require('./classics');
+                const classicsItems = await Promise.race([
+                  classicsModule.fetchClassicsPaginated(page + 1, 'feature_films'),
+                  new Promise(resolve => setTimeout(() => resolve([]), 1200))
+                ]);
+                return classicsItems ? classicsItems.slice(0, 6) : [];
+              } catch (_) { return []; }
+            })());
+          }
+
+          // Task 3: Adult Anime (Hstream & HentaiMama)
+          if (allowAdultParam === 'true' && isGeneralCatalog) {
+            subTasks.push((async () => {
+              try {
+                const hstreamModule = require('./hstream');
+                const hmamaModule = require('./hentaimama');
+                const [hsItems, hmItems] = await Promise.all([
+                  Promise.race([hstreamModule.fetchHstreamCatalog(page + 1, 'view-count', ''), new Promise(r => setTimeout(() => r([]), 1200))]),
+                  Promise.race([hmamaModule.fetchHentaiMamaCatalog(page + 1, ''), new Promise(r => setTimeout(() => r([]), 1200))])
+                ]);
+                const resList = [];
+                if (hsItems && hsItems.length > 0) resList.push(...hsItems.slice(0, 4));
+                if (hmItems && hmItems.length > 0) resList.push(...hmItems.slice(0, 4));
+                return resList;
+              } catch (_) { return []; }
+            })());
+          }
+
+          const settledSub = await Promise.allSettled(subTasks);
+          settledSub.forEach(s => {
+            if (s.status === 'fulfilled' && Array.isArray(s.value)) {
+              extraItems.push(...s.value);
+            }
+          });
+
+          // Interleave results
+          if (extraItems.length > 0) {
+            let interleaved = [];
+            const maxLen = Math.max(results.length, extraItems.length);
+            for (let i = 0; i < maxLen; i++) {
+              if (i < results.length) interleaved.push(results[i]);
+              if (i < extraItems.length) interleaved.push(extraItems[i]);
+            }
+            results = interleaved;
+          }
+        }
+
+        const lastRawItem = rawResults.length > 0 ? rawResults[rawResults.length - 1] : null;
+        let nextCursor = (lastRawItem || results.length > 0) ? (lastRawItem?.sort || `page_${page + 1}`) : '';
+        results = deduplicateResults(results);
+        return res.status(200).json({ success: true, results, nextCursor });
+    }
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+};

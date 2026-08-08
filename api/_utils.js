@@ -1,0 +1,237 @@
+const crypto = require('crypto');
+
+const LOKLOK_API_BASE = 'https://ga-mobile-api.loklok.tv/cms/app';
+const MASK_SECRET = process.env.WOX_MASK_SECRET || 'wox-stream-gateway-secret-2026-v1';
+
+// Dynamic User-Agent Pool
+const USER_AGENTS = [
+  'Dalvik/2.1.0 (Linux; U; Android 12; SM-G998B Build/SP1A.210812.016)',
+  'Dalvik/2.1.0 (Linux; U; Android 13; Pixel 7 Pro Build/TD1A.220804.031)',
+  'Mozilla/5.0 (Linux; Android 13; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.210 Mobile Safari/537.36',
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_2_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15'
+];
+
+// Dynamic Consumer ISP IP Ranges (Southeast Asia & US)
+const IP_POOLS = [
+  () => `120.28.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
+  () => `112.198.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
+  () => `180.190.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
+  () => `110.54.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
+  () => `203.177.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`
+];
+
+function sanitizeToken(token) {
+  if (!token) return '';
+  const s = String(token).trim();
+  if (s === '1' || s === 'undefined' || s === 'null' || s === '[object Object]' || s.length < 8) {
+    return '';
+  }
+  return s;
+}
+
+// Modern Browser User-Agents for Narto Drama & CDN bypass
+const BROWSER_USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+];
+
+function getNartoHeaders() {
+  const randomIp = IP_POOLS[Math.floor(Math.random() * IP_POOLS.length)]();
+  const randomUA = BROWSER_USER_AGENTS[Math.floor(Math.random() * BROWSER_USER_AGENTS.length)];
+  return {
+    'User-Agent': randomUA,
+    'Accept': 'application/json, text/plain, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'X-Requested-With': 'XMLHttpRequest',
+    'Referer': 'https://narto-drama.com/',
+    'X-Forwarded-For': randomIp,
+    'X-Real-IP': randomIp
+  };
+}
+
+// Stable guest device ID - matches official Tadami Loklok Android client
+const GUEST_DEVICE_ID = '60A3305FDAAC489AAF4C7DD33B1483B4';
+
+// Get headers for Loklok API (requires valid Android Tem3 client signature)
+function getLoklokHeaders(token = '') {
+  const cleanToken = sanitizeToken(token);
+  const ip = '120.28.0.1';
+
+  // Create deterministic deviceid from token if available, otherwise stable guest device id
+  const deviceId = cleanToken 
+    ? crypto.createHash('md5').update(cleanToken).digest('hex').toUpperCase() 
+    : GUEST_DEVICE_ID;
+
+  const headers = {
+    'Accept': 'application/json',
+    'lang': 'en',
+    'versioncode': '33',
+    'clienttype': 'android_tem3',
+    'deviceid': deviceId,
+    'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 12)',
+    'X-Forwarded-For': ip,
+    'X-Real-IP': ip,
+    'clientip': ip,
+    'True-Client-IP': ip,
+    'CF-Connecting-IP': ip,
+    'X-Client-IP': ip,
+    'X-Originating-IP': ip,
+    'X-Remote-IP': ip,
+    'X-Remote-Addr': ip,
+    'Fastly-Client-IP': ip,
+    'Forwarded': `for=${ip};proto=https`
+  };
+
+  if (cleanToken) {
+    headers['token'] = cleanToken;
+  }
+
+  return headers;
+}
+
+function setCorsHeaders(res) {
+  if (typeof res.setHeader === 'function') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, token, wox-token');
+  }
+}
+
+// Matches Loklok.kt ensureAbsoluteCoverUrl & encodeUrl
+function fixCoverUrl(url) {
+  if (!url) return '';
+  let fullUrl = url;
+  if (!fullUrl.startsWith('http://') && !fullUrl.startsWith('https://')) {
+    const path = fullUrl.startsWith('/') ? fullUrl : `/${fullUrl}`;
+    fullUrl = `https://img.chhhn.com${path}`;
+  } else {
+    fullUrl = fullUrl.replace('img.loklok.tv', 'img.chhhn.com')
+                     .replace('pic.loklok.tv', 'img.chhhn.com')
+                     .replace('image.loklok.tv', 'img.chhhn.com');
+  }
+
+  try {
+    const schemeAndHost = fullUrl.substring(0, fullUrl.indexOf('://') + 3) + fullUrl.substring(fullUrl.indexOf('://') + 3).split('/')[0];
+    const path = fullUrl.substring(fullUrl.indexOf('://') + 3).split('/').slice(1).join('/');
+    const encodedPath = path.split('/').map(segment => {
+      return encodeURIComponent(segment)
+        .replace(/\+/g, '%20')
+        .replace(/!/g, '%21')
+        .replace(/'/g, '%27')
+        .replace(/\(/g, '%28')
+        .replace(/\)/g, '%29')
+        .replace(/~/g, '%7E');
+    }).join('/');
+
+    return `${schemeAndHost}/${encodedPath}`;
+  } catch (_) {
+    return encodeURI(fullUrl);
+  }
+}
+
+async function loklokFetch(endpoint, options = {}) {
+  const url = endpoint.startsWith('http') ? endpoint : `${LOKLOK_API_BASE}${endpoint}`;
+  const response = await fetch(url, options);
+  const data = await response.json();
+  return data;
+}
+
+// --- WOX MASKING GATEWAY UTILITIES ---
+
+// 1. Opaque ID Masking (Hides raw provider IDs & domains)
+// Provider prefix map for opaque ID masking
+const PROVIDER_PREFIXES = {
+  loklok: 'wox_l_',
+  narto: 'wox_n_',
+  hollywood: 'wox_h_',
+  anime: 'wox_a_',
+  drama: 'wox_d_',
+  classics: 'wox_c_',
+  adult: 'wox_x_',
+  hstream: 'wox_hs_',
+  hentaimama: 'wox_hm_',
+  vivaone: 'wox_vo_',
+  vivamax: 'wox_vm_',
+  vivamoviebox: 'wox_vb_'
+};
+
+// Reverse map: prefix -> provider
+const PREFIX_TO_PROVIDER = Object.fromEntries(
+  Object.entries(PROVIDER_PREFIXES).map(([k, v]) => [v, k])
+);
+
+function maskId(provider, originalId) {
+  if (!originalId) return '';
+  const str = String(originalId);
+  if (str.startsWith('wox_')) return str; // Already masked
+  const prefix = PROVIDER_PREFIXES[provider] || 'wox_l_';
+  const encoded = Buffer.from(str).toString('base64url');
+  return `${prefix}${encoded}`;
+}
+
+function unmaskId(maskedId) {
+  if (!maskedId) return { provider: 'loklok', id: '' };
+  const str = String(maskedId);
+  
+  // Check all known prefixes
+  for (const [prefix, provider] of Object.entries(PREFIX_TO_PROVIDER)) {
+    if (str.startsWith(prefix)) {
+      const raw = Buffer.from(str.slice(prefix.length), 'base64url').toString('utf8');
+      return { provider, id: raw };
+    }
+  }
+  
+  // Legacy prefix handling
+  if (str.startsWith('narto_')) {
+    return { provider: 'narto', id: str.replace('narto_', '') };
+  }
+  return { provider: 'loklok', id: str };
+}
+
+// 2. Stream Ticket Generator (Encrypts raw target stream URLs into ephemeral WOX stream proxy tickets)
+function createStreamTicket(targetStreamUrl, expiresMinutes = 240) {
+  if (!targetStreamUrl) return '';
+  const payload = JSON.stringify({
+    url: targetStreamUrl,
+    exp: Date.now() + (expiresMinutes * 60 * 1000)
+  });
+  const cipher = crypto.createCipheriv('aes-128-cbc', crypto.scryptSync(MASK_SECRET, 'woxsalt', 16), Buffer.alloc(16, 0));
+  let encrypted = cipher.update(payload, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return `wox_st_${encrypted}`;
+}
+
+function decryptStreamTicket(ticket) {
+  if (!ticket || !ticket.startsWith('wox_st_')) return null;
+  try {
+    const hex = ticket.replace('wox_st_', '');
+    const decipher = crypto.createDecipheriv('aes-128-cbc', crypto.scryptSync(MASK_SECRET, 'woxsalt', 16), Buffer.alloc(16, 0));
+    let decrypted = decipher.update(hex, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    const data = JSON.parse(decrypted);
+    if (data.exp && Date.now() > data.exp) return null; // Expired
+    return data.url;
+  } catch (e) {
+    return null;
+  }
+}
+
+module.exports = {
+  LOKLOK_API_BASE,
+  PROVIDER_PREFIXES,
+  PREFIX_TO_PROVIDER,
+  sanitizeToken,
+  getLoklokHeaders,
+  getNartoHeaders,
+  setCorsHeaders,
+  fixCoverUrl,
+  loklokFetch,
+  maskId,
+  unmaskId,
+  createStreamTicket,
+  decryptStreamTicket
+};

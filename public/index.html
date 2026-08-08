@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="WOX-Stream — Cyberpunk streaming terminal. Movies, K-Drama, Anime & TV Shows in HD.">
+  <title>WOX-STREAM // VOID CINEMA</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  
+  <!-- Image CDN Preconnects & Resource Hints for Instant Loading -->
+  <link rel="preconnect" href="https://img.chhhn.com" crossorigin>
+  <link rel="dns-prefetch" href="https://img.chhhn.com">
+  <link rel="preconnect" href="https://lh3.googleusercontent.com" crossorigin>
+  <link rel="dns-prefetch" href="https://lh3.googleusercontent.com">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Orbitron:wght@400;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Plyr.js & HLS.js dependencies -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.css">
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.polyfilled.js"></script>
+  <!-- QRCode.js dependency -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+
+  <!-- Application Logic loaded upfront -->
+  <script src="app.js"></script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  </script>
+</head>
+<body>
+
+  <!-- Protocol Warning Banner if opened via file:// -->
+  <div id="protocol-warning" style="display: none; background: #e11d48; color: #fff; text-align: center; padding: 0.75rem; font-weight: 600; font-size: 0.9rem; z-index: 10000; position: relative;">
+    ⚠️ You opened this file via file:// protocol. API requests will fail! Please run <strong>run.bat</strong> and open <strong>http://localhost:3000</strong>.
+  </div>
+
+  <div class="app-container">
+    
+    <!-- Left Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-brand" onclick="switchNav('home')">
+        <img src="wox_logo.svg" alt="WOX-Stream" style="width:32px;height:32px;object-fit:contain;filter:drop-shadow(0 0 8px rgba(0,255,255,0.6));">
+        <span class="sidebar-title">WOX-STREAM</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a class="nav-item active" id="nav-home" onclick="switchNav('home')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span>Home</span>
+        </a>
+        <a class="nav-item" id="nav-history" onclick="switchNav('history')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 16 14"/></svg>
+          <span>Watch History</span>
+        </a>
+        <a class="nav-item" id="nav-kdrama" onclick="filterCategoryNav('K-Drama', 'TV', '53')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="15" x="2" y="3" rx="2"/><polyline points="8 21 12 17 16 21"/></svg>
+          <span>K-Drama</span>
+        </a>
+        <a class="nav-item" id="nav-movie" onclick="filterCategoryNav('Movie', 'MOVIE,TVSPECIAL', '')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18M17 3v18M3 7.5h18M3 12h18M3 16.5h18"/></svg>
+          <span>Movie</span>
+        </a>
+        <a class="nav-item" id="nav-anime" onclick="filterCategoryNav('Anime', 'COMIC', '')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3z"/></svg>
+          <span>Anime</span>
+        </a>
+        <a class="nav-item" id="nav-western" onclick="filterCategoryNav('Western TV', 'TV', '61')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <span>Western TV</span>
+        </a>
+        <a class="nav-item" id="nav-shorts" onclick="filterCategoryNav('Shorts', 'MINISERIES', '')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <span>Shorts</span>
+        </a>
+        <a class="nav-item" id="nav-calendar" onclick="switchNav('calendar')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+          <span>Schedule</span>
+        </a>
+        <a class="nav-item" id="nav-watchlist" onclick="switchNav('watchlist')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <span>My List</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <a class="nav-item" id="nav-category" onclick="switchNav('category')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          <span>Category</span>
+        </a>
+        <a class="nav-item" onclick="openSettingsModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Settings</span>
+        </a>
+        <a class="nav-item" onclick="openModal('modal-dmca')" style="color:var(--text-muted);font-size:0.8rem;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>DMCA Disclaimer</span>
+        </a>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="content-wrapper">
+      
+      <!-- Top Header Bar -->
+      <header class="top-navbar">
+        <div class="search-container" style="position: relative;">
+          <svg class="search-bar-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="text" id="search-input" class="search-bar" placeholder="Search movies, anime, dramas..." oninput="handleSearchKeyUp(event)" onkeyup="handleSearchKeyUp(event)" onfocus="handleSearchFocus()" onblur="handleSearchBlur()">
+          <button id="search-clear-btn" class="search-clear-btn" onclick="clearSearchInput()" style="display:none;" title="Clear search">&times;</button>
+          <div id="search-suggestions-dropdown" style="display:none; position:absolute; top:calc(100% + 6px); left:0; right:0; background:rgba(12, 12, 18, 0.96); backdrop-filter:blur(20px); border:1px solid rgba(0,255,255,0.15); border-radius:8px; z-index:999999; box-shadow:0 16px 40px rgba(0,0,0,0.8), 0 0 1px rgba(0,255,255,0.2); max-height:340px; overflow-y:auto; padding:0.4rem 0;"></div>
+        </div>
+
+        <div class="top-controls">
+          <button class="top-icon-btn" title="Watch History" onclick="switchNav('history')">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 16 14"/></svg>
+          </button>
+
+          <button class="top-icon-btn" title="Settings" onclick="openSettingsModal()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+
+          <div id="user-area">
+            <button class="btn btn-primary" id="btn-login" onclick="openLoginModal()">Sign In</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main Feed Views -->
+      <main class="main-view">
+        
+        <!-- Home View -->
+        <section id="view-home">
+          <!-- Hero Banner with Thumbnail Carousel Strip -->
+          <div class="hero-banner" id="hero-banner">
+            <img id="hero-backdrop" class="hero-backdrop" src="" alt="Hero Backdrop" onerror="handleImgError(this)">
+            <div class="hero-gradient-overlay"></div>
+            
+            <div class="hero-content">
+              <h1 class="hero-title-text" id="hero-title">Loading...</h1>
+              <div class="hero-meta" id="hero-meta">2026 / Action / Drama / Romance</div>
+              <p class="hero-description" id="hero-desc">Discover the top trending movies and dramas on Loklok.</p>
+              
+              <div class="hero-actions">
+                <div class="hero-rank-tag" id="hero-rank">🏅 Crime list Top 1</div>
+                <button class="btn btn-primary" id="hero-play-btn">▶ Watch Now</button>
+              </div>
+            </div>
+
+            <!-- Thumbnail Selector Strip -->
+            <div class="hero-thumbnails" id="hero-thumbnails"></div>
+          </div>
+
+          <!-- Content Shelves -->
+          <div id="home-shelves">
+            <div class="spinner"></div>
+          </div>
+        </section>
+
+        <!-- Dedicated Search Results View -->
+        <section id="view-search" style="display: none;">
+          <div class="shelf-header" style="margin-bottom: 1.5rem;">
+            <h2 class="shelf-title" id="search-title">Search Results</h2>
+          </div>
+          <div class="card-grid" id="search-grid">
+            <div class="spinner"></div>
+          </div>
+        </section>
+
+        <!-- Official Loklok Multi-Filter Category View -->
+        <section id="view-category" style="display: none;">
+          
+          <div class="shelf-header">
+            <h2 class="shelf-title" id="category-title">Category</h2>
+            <button class="btn btn-glass" id="collapse-btn" onclick="toggleFilterOptions()" style="font-size:0.85rem;padding:0.4rem 0.85rem;">Collapse Options 🔼</button>
+          </div>
+
+          <!-- Multi-Filter Selection Box -->
+          <div class="category-filter-box" id="filter-box">
+            <div class="filter-row-group">
+              
+              <!-- Row 1: Type -->
+              <div class="filter-row">
+                <div class="filter-pills" id="pills-type">
+                  <span class="filter-pill active" data-val="">ALL</span>
+                  <span class="filter-pill" data-val="TV,SETI,VARIETY,TALK,COMIC,DOCUMENTARY">TV Series</span>
+                  <span class="filter-pill" data-val="MOVIE,TVSPECIAL">Movie</span>
+                  <span class="filter-pill" data-val="COMIC">Anime</span>
+                  <span class="filter-pill" data-val="VARIETY,TALK">Variety Show</span>
+                  <span class="filter-pill" data-val="TALK">Talk Show</span>
+                  <span class="filter-pill" data-val="DOCUMENTARY">Documentary</span>
+                  <span class="filter-pill" data-val="MINISERIES">Shorts</span>
+                </div>
+              </div>
+
+              <!-- Row 2: Region -->
+              <div class="filter-row">
+                <div class="filter-pills" id="pills-region">
+                  <span class="filter-pill active" data-val="">ALL</span>
+                  <span class="filter-pill" data-val="61">America</span>
+                  <span class="filter-pill" data-val="53">Korea</span>
+                  <span class="filter-pill" data-val="60">U.K</span>
+                  <span class="filter-pill" data-val="44">Japan</span>
+                  <span class="filter-pill" data-val="57">Thailand</span>
+                  <span class="filter-pill" data-val="37,60,58,50,54,55">Europe</span>
+                  <span class="filter-pill" data-val="32,56">China</span>
+                  <span class="filter-pill" data-val="41">Indonesia</span>
+                  <span class="filter-pill" data-val="34">Philippines</span>
+                  <span class="filter-pill" data-val="40">India</span>
+                  <span class="filter-pill" data-val="27">Australia</span>
+                  <span class="filter-pill" data-val="26,28,29,30">other</span>
+                </div>
+              </div>
+
+              <!-- Row 3: Genre -->
+              <div class="filter-row">
+                <div class="filter-pills" id="pills-genre">
+                  <span class="filter-pill active" data-val="">ALL</span>
+                  <span class="filter-pill" data-val="10">Romance</span>
+                  <span class="filter-pill" data-val="1">Action</span>
+                  <span class="filter-pill" data-val="13">Fantasy</span>
+                  <span class="filter-pill" data-val="23">Animation</span>
+                  <span class="filter-pill" data-val="16">Suspense</span>
+                  <span class="filter-pill" data-val="19">Sci-Fi</span>
+                  <span class="filter-pill" data-val="5">Horror</span>
+                  <span class="filter-pill" data-val="6">Comedy</span>
+                  <span class="filter-pill" data-val="2">Crime</span>
+                  <span class="filter-pill" data-val="3">Adventure</span>
+                  <span class="filter-pill" data-val="9">Thriller</span>
+                  <span class="filter-pill" data-val="64">LGBTQ</span>
+                  <span class="filter-pill" data-val="8">Drama</span>
+                  <span class="filter-pill" data-val="24">Variety Show</span>
+                  <span class="filter-pill" data-val="63">Family</span>
+                  <span class="filter-pill" data-val="65">Musical</span>
+                  <span class="filter-pill" data-val="14">War</span>
+                  <span class="filter-pill" data-val="7">Catastrophe</span>
+                  <span class="filter-pill" data-val="25">Documentary</span>
+                  <span class="filter-pill" data-val="20">other</span>
+                </div>
+              </div>
+
+              <!-- Row 4: Sort Order -->
+              <div class="filter-row">
+                <div class="filter-pills" id="pills-sort">
+                  <span class="filter-pill active" data-val="count">Popularity</span>
+                  <span class="filter-pill" data-val="up">Recent</span>
+                  <span class="filter-pill" data-val="score">High Rating</span>
+                </div>
+              </div>
+
+
+
+            </div>
+          </div>
+
+          <!-- Category Results Grid -->
+          <div class="card-grid" id="category-grid">
+            <div class="spinner"></div>
+          </div>
+
+          <!-- Continuous Infinite Scroll Sentinel Loader -->
+          <div id="category-infinite-loader" style="text-align: center; padding: 2.5rem 1rem; margin-top: 1.5rem; margin-bottom: 2rem;">
+            <div id="infinite-scroll-spinner" class="spinner" style="display: none; margin: 0 auto 0.75rem auto;"></div>
+            <span id="infinite-scroll-text" style="color: var(--text-muted); font-size: 0.9rem; font-weight: 500;">
+              ✨ Scroll down to discover more movies & shows...
+            </span>
+          </div>
+
+        </section>
+
+        <!-- Weekly Release Schedule Calendar View -->
+        <section id="view-calendar" style="display: none; padding: 2rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <div>
+              <h1 style="font-family: 'Outfit', sans-serif; font-size: 2rem; font-weight: 800; color: #fff;">🗓️ Weekly Release Calendar</h1>
+              <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem;">Upcoming anime, K-Drama, and movie episode releases for this week</p>
+            </div>
+            <button class="btn btn-glass" onclick="loadWeeklyCalendar()">Refresh Schedule 🔄</button>
+          </div>
+
+          <!-- Days of Week Selector Tabs -->
+          <div style="display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-glass);" id="calendar-day-tabs">
+            <!-- Rendered dynamically -->
+          </div>
+
+          <!-- Selected Day Schedule Grid -->
+          <div class="card-grid" id="calendar-schedule-grid">
+            <div class="spinner"></div>
+          </div>
+        </section>
+
+        <!-- Official Loklok Profile & Watch History View -->
+        <section id="view-history" style="display: none;">
+          <!-- User Profile Header Container (Rendered dynamically) -->
+          <div id="profile-header-container"></div>
+
+          <!-- Official Loklok Profile Sub-Tabs with DB Import/Export Controls -->
+          <div class="profile-sub-nav" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-glass); margin-bottom: 1.5rem; padding-bottom: 0.75rem; flex-wrap: wrap; gap: 1rem;">
+            <div id="history-subnav" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button class="history-subnav-btn active" id="tab-history" onclick="switchProfileTab('history')">📜 Watch History</button>
+              <button class="history-subnav-btn" id="tab-appointment" onclick="switchProfileTab('appointment')">⏰ Reminders</button>
+              <button class="history-subnav-btn" id="tab-collection" onclick="switchProfileTab('collection')">⭐ My Collection</button>
+              <button class="history-subnav-btn" id="tab-account" onclick="switchProfileTab('account')">👤 Account Settings</button>
+            </div>
+
+            <!-- Import / Export Database Buttons -->
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <input type="file" id="db-file-input" accept=".db,.sqlite,.json" style="display: none;" onchange="handleDbFileImport(event)">
+              <button class="btn btn-glass" onclick="document.getElementById('db-file-input').click()" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; border-color: rgba(56,189,248,0.4); color: #38bdf8;" title="Import rrclient.db from computer or JSON backup">
+                📥 Import rrclient.db
+              </button>
+              <button class="btn btn-glass" onclick="exportHistoryJson()" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; border-color: rgba(192,132,252,0.4); color: #c084fc;" title="Export history to JSON backup">
+                📤 Export Backup
+              </button>
+            </div>
+          </div>
+
+          <!-- History Grid -->
+          <div class="card-grid" id="history-grid">
+            <div class="spinner"></div>
+          </div>
+
+          <!-- Sub-Tab Content Area -->
+          <div id="profile-sub-content" style="display: none;"></div>
+        </section>
+
+        <!-- Watchlist / My List View -->
+        <section id="view-watchlist" style="display: none; padding: 2rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <h1 style="font-family: 'Outfit', sans-serif; font-size: 2rem; font-weight: 800; color: #fff;">⭐ My Saved Watchlist</h1>
+              <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem;">Movies, dramas, and anime you've saved for later</p>
+            </div>
+            <button class="btn btn-glass" onclick="loadWatchlist()">Refresh List 🔄</button>
+          </div>
+
+          <!-- Watchlist Folders / Status Filter Bar -->
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; overflow-x: auto; padding-bottom: 0.5rem;" id="watchlist-folder-bar">
+            <button class="filter-pill active" onclick="filterWatchlistByFolder('all', this)">⭐ All Saved</button>
+            <button class="filter-pill" onclick="filterWatchlistByFolder('watching', this)">▶ Watching</button>
+            <button class="filter-pill" onclick="filterWatchlistByFolder('plantowatch', this)">📌 Plan to Watch</button>
+            <button class="filter-pill" onclick="filterWatchlistByFolder('completed', this)">✅ Completed</button>
+            <button class="filter-pill" onclick="filterWatchlistByFolder('favorites', this)">💖 Favorites</button>
+          </div>
+
+          <div class="card-grid" id="watchlist-grid">
+            <div class="spinner"></div>
+          </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="site-footer">
+          <div class="footer-content">
+            <div class="footer-brand">
+              <img src="wox_logo.svg" alt="WOX-Stream Icon" style="width:28px;height:28px;filter:drop-shadow(0 0 6px rgba(147,51,234,0.8));">
+              <span>WOX-STREAM</span>
+            </div>
+            <p class="footer-copy">© 2026 WOX-Stream. All rights reserved. Watch HD Movies, K-Drama, Anime & Short Dramas.</p>
+          </div>
+        </footer>
+
+      </main>
+
+    </div>
+  </div>
+
+  <!-- Mobile Bottom Navigation Bar -->
+  <nav class="mobile-bottom-nav">
+    <a class="mobile-nav-item active" onclick="switchNav('home')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Home</span>
+    </a>
+    <a class="mobile-nav-item" onclick="switchNav('category')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      <span>Category</span>
+    </a>
+    <a class="mobile-nav-item" onclick="switchNav('calendar')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+      <span>Schedule</span>
+    </a>
+    <a class="mobile-nav-item" onclick="switchNav('watchlist')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      <span>My List</span>
+    </a>
+    <a class="mobile-nav-item" onclick="switchNav('history')">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 16 14"/></svg>
+      <span>History</span>
+    </a>
+  </nav>
+
+  <!-- Media Detail Modal -->
+  <div class="modal-backdrop" id="modal-detail">
+    <div class="modal-container">
+      <button class="modal-close" onclick="closeModal('modal-detail')">&times;</button>
+      <div id="detail-content">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Premium Plyr Video Player Modal -->
+  <div class="modal-backdrop" id="modal-player" style="z-index: 999999;">
+    <div class="modal-container player-modal-container" style="position: relative; background: #000; overflow: hidden; display: flex; flex-direction: column;">
+      
+      <!-- Top Floating Control Header Bar -->
+      <div class="player-top-header" style="padding: 0.6rem 1rem; background: rgba(10, 11, 18, 0.95); border-bottom: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center; z-index: 20; gap: 0.75rem;">
+        <div style="display: flex; gap: 0.5rem; align-items: center; min-width: 0; flex-wrap: wrap;">
+          <button class="btn btn-glass" onclick="playPrevEpisode()" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(255,255,255,0.06); border-color: var(--border-glass); color: #fff;">⏮ Prev</button>
+          <button class="btn btn-glass" onclick="playNextEpisode()" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(255,255,255,0.06); border-color: var(--border-glass); color: #fff;">Next ⏭</button>
+          
+          <!-- Audio Volume Booster Control -->
+          <div style="position: relative; display: inline-block;">
+            <button class="btn btn-glass" onclick="toggleVolBoostDropdown(event)" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(56,189,248,0.12); border-color: rgba(56,189,248,0.3); color: var(--accent-cyan); font-weight: 600;" title="Boost Audio Volume (Up to 400%)">
+              🔊 Boost: <span id="vol-boost-label">100%</span> ▾
+            </button>
+            <div id="vol-boost-dropdown" style="display: none; position: absolute; top: 115%; left: 0; background: #0f121d; border: 1px solid var(--border-glass); border-radius: 8px; padding: 0.4rem; z-index: 999; min-width: 140px; box-shadow: 0 12px 30px rgba(0,0,0,0.95);">
+              <div onclick="setVolumeBoost(1.0)" style="padding: 0.45rem 0.75rem; cursor: pointer; color: #fff; font-size: 0.85rem; border-radius: 4px; display: flex; justify-content: space-between;" onmouseover="this.style.background='rgba(56,189,248,0.2)'" onmouseout="this.style.background='transparent'">
+                <span>100%</span><span style="color: var(--text-muted);">Standard</span>
+              </div>
+              <div onclick="setVolumeBoost(1.5)" style="padding: 0.45rem 0.75rem; cursor: pointer; color: #fff; font-size: 0.85rem; border-radius: 4px; display: flex; justify-content: space-between;" onmouseover="this.style.background='rgba(56,189,248,0.2)'" onmouseout="this.style.background='transparent'">
+                <span>150%</span><span style="color: #38bdf8;">+50%</span>
+              </div>
+              <div onclick="setVolumeBoost(2.0)" style="padding: 0.45rem 0.75rem; cursor: pointer; color: #fff; font-size: 0.85rem; border-radius: 4px; display: flex; justify-content: space-between;" onmouseover="this.style.background='rgba(56,189,248,0.2)'" onmouseout="this.style.background='transparent'">
+                <span>200%</span><span style="color: #c084fc;">Double</span>
+              </div>
+              <div onclick="setVolumeBoost(4.0)" style="padding: 0.45rem 0.75rem; cursor: pointer; color: #f87171; font-weight: 700; font-size: 0.85rem; border-radius: 4px; display: flex; justify-content: space-between;" onmouseover="this.style.background='rgba(239,68,68,0.2)'" onmouseout="this.style.background='transparent'">
+                <span>⚡ 400%</span><span>MAX</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Player Live Subtitle Customizer Popover Button -->
+          <div style="position: relative; display: inline-block;">
+            <button class="btn btn-glass" onclick="togglePlayerSubPanel(event)" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(147,51,234,0.15); border-color: rgba(147,51,234,0.3); color: #c084fc; font-weight: 600;" title="Customize Subtitle Appearance">
+              🔤 Subtitle Style ⚙️
+            </button>
+            
+            <div id="player-sub-popover" style="display: none; position: absolute; top: 115%; left: 0; background: #0f121d; border: 1px solid var(--border-glass); border-radius: 12px; padding: 1.25rem; z-index: 999; width: 300px; box-shadow: 0 16px 40px rgba(0,0,0,0.95);">
+              <h4 style="font-size: 0.95rem; font-weight: 700; color: #fff; margin-bottom: 1rem; border-bottom: 1px solid var(--border-glass); padding-bottom: 0.5rem;">🔤 Subtitle Appearance</h4>
+              
+              <div style="margin-bottom: 0.85rem;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem;">
+                  <span>Position Height</span>
+                  <span id="player-sub-pos-val" style="color: #c084fc; font-weight: 600;">12%</span>
+                </div>
+                <input type="range" id="player-sub-bottom" min="2" max="40" value="12" step="1" style="width: 100%; accent-color: #9333ea; cursor: pointer;" oninput="updateSubtitleSetting('bottom', this.value + '%')">
+              </div>
+
+              <div style="margin-bottom: 0.85rem;">
+                <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem;">Font Size</label>
+                <select id="player-sub-size" onchange="updateSubtitleSetting('fontSize', this.value)" style="width: 100%; padding: 0.45rem; background: #1e293b; border: 1px solid var(--border-glass); color: #fff; border-radius: 6px; font-size: 0.85rem;">
+                  <option value="16px">16px (Small)</option>
+                  <option value="24px" selected>24px (Normal)</option>
+                  <option value="30px">30px (Large)</option>
+                  <option value="36px">36px (Extra Large)</option>
+                  <option value="42px">42px (Huge)</option>
+                </select>
+              </div>
+
+              <div style="margin-bottom: 0.85rem;">
+                <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 0.3rem;">Color & Style Preset</label>
+                <select id="player-sub-style" style="width: 100%; padding: 0.45rem; background: #1e293b; border: 1px solid var(--border-glass); color: #fff; border-radius: 6px; font-size: 0.85rem; outline: none; cursor: pointer;" onchange="updateSubtitleSetting('stylePreset', this.value)">
+                  <option value="white" selected>⚪ Classic White</option>
+                  <option value="yellow">🟡 Vibrant Yellow</option>
+                  <option value="cyan">🟢 Neon Cyan</option>
+                  <option value="box">⬛ Black Background Box</option>
+                  <option value="purple">🌌 Purple Glow</option>
+                </select>
+              </div>
+
+              <div>
+                <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 0.3rem;">Font Family</label>
+                <select id="player-sub-font" style="width: 100%; padding: 0.45rem; background: #1e293b; border: 1px solid var(--border-glass); color: #fff; border-radius: 6px; font-size: 0.85rem; outline: none; cursor: pointer;" onchange="updateSubtitleSetting('fontFamily', this.value)">
+                  <option value="Inter, sans-serif" selected>Sans-Serif (Modern)</option>
+                  <option value="Georgia, serif">Serif (Classic)</option>
+                  <option value="'Courier New', monospace">Monospace (Code)</option>
+                  <option value="cursive">Cursive (Script)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Playback Speed Control -->
+          <div style="position: relative; display: inline-block;">
+            <button class="btn btn-glass" onclick="toggleSpeedDropdown(event)" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(251,146,60,0.12); border-color: rgba(251,146,60,0.3); color: #fb923c; font-weight: 600;" title="Playback Speed">
+              ⚡ <span id="speed-label">1.0x</span> ▾
+            </button>
+            <div id="speed-dropdown" style="display: none; position: absolute; top: 115%; left: 0; background: #0f121d; border: 1px solid var(--border-glass); border-radius: 8px; padding: 0.4rem; z-index: 999; min-width: 130px; box-shadow: 0 12px 30px rgba(0,0,0,0.95);">
+              <div onclick="setPlaybackSpeed(0.5)" style="padding: 0.4rem 0.75rem; cursor: pointer; color: #fff; font-size: 0.85rem; border-radius: 4px;" onmouseover="this.style.background='rgba(251,146,60,0.2)'" onmouseout="this.style.background='transparent'">0.5x Slow</div>
+              <div onclick="setPlaybackSpeed(0.75)" style="padding: 0.4rem 0.75rem; cursor: pointer; color: #fff; font-size: 0.85rem; border-radius: 4px;" onmouseover="this.style.background='rgba(251,146,60,0.2)'" onmouseout="this.style.background='transparent'">0.75x</div>
+              <div onclick="setPlaybackSpeed(1.0)" style="padding: 0.4rem 0.75rem; cursor: pointer; color: #38bdf8; font-size: 0.85rem; font-weight: 700; border-radius: 4px;" onmouseover="this.style.background='rgba(251,146,60,0.2)'" onmouseout="this.style.background='transparent'">1.0x Normal</div>
+              <div onclick="setPlaybackSpeed(1.25)" style="padding: 0.4rem 0.75rem; cursor: pointer; color: #fff; font-size: 0.85rem; border-radius: 4px;" onmouseover="this.style.background='rgba(251,146,60,0.2)'" onmouseout="this.style.background='transparent'">1.25x</div>
+              <div onclick="setPlaybackSpeed(1.5)" style="padding: 0.4rem 0.75rem; cursor: pointer; color: #fff; font-size: 0.85rem; border-radius: 4px;" onmouseover="this.style.background='rgba(251,146,60,0.2)'" onmouseout="this.style.background='transparent'">1.5x</div>
+              <div onclick="setPlaybackSpeed(2.0)" style="padding: 0.4rem 0.75rem; cursor: pointer; color: #f87171; font-weight: 700; font-size: 0.85rem; border-radius: 4px;" onmouseover="this.style.background='rgba(239,68,68,0.2)'" onmouseout="this.style.background='transparent'">2.0x Fast</div>
+            </div>
+          </div>
+
+          <!-- Picture-in-Picture Button -->
+          <button class="btn btn-glass" onclick="togglePiP()" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(167,139,250,0.12); border-color: rgba(167,139,250,0.3); color: #a78bfa; font-weight: 600;" title="Picture-in-Picture Mode">📌 PiP</button>
+
+          <button class="btn btn-glass" onclick="skipVideoIntro()" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(236,72,153,0.15); border-color: rgba(236,72,153,0.3); color: #f472b6; font-weight: 600;" title="Skip Video Opening Theme (+85s)">⏭ Skip Intro</button>
+          
+          <button id="autonext-btn" class="btn btn-glass" onclick="toggleAutoNext()" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.3); color: #4ade80; font-weight: 600;" title="Toggle Auto-Play Next Episode">Auto-Next: ON 🔄</button>
+
+          <!-- Stream Mirror Server Selector (Hidden by default, shown ONLY when real mirrors exist) -->
+          <div id="player-mirror-btn-wrap" style="position: relative; display: none;">
+            <button class="btn btn-glass" onclick="toggleMirrorDropdown(event)" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.3); color: #4ade80; font-weight: 600;" title="Switch Video Stream Mirror">
+              🌐 Mirror: <span id="current-mirror-label">Loklok HD</span> ▾
+            </button>
+            <div id="player-mirror-dropdown" style="display: none; position: absolute; top: 115%; right: 0; background: #0f121d; border: 1px solid var(--border-glass); border-radius: 8px; padding: 0.4rem; z-index: 999; min-width: 175px; box-shadow: 0 12px 30px rgba(0,0,0,0.95);">
+            </div>
+          </div>
+
+          <span id="player-title-text" style="font-size: 0.9rem; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: 0.5rem;"></span>
+        </div>
+        <button class="modal-close" onclick="closePlayerModal()" style="position: relative; top: 0; right: 0; background: rgba(239, 68, 68, 0.9); border: 1px solid rgba(255,255,255,0.2); color: #fff; width: 34px; height: 34px; font-size: 1.2rem; font-weight: 700; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;" title="Close Video Player (Esc)">&times;</button>
+      </div>
+
+      <div class="plyr-wrapper" id="player-container" style="width: 100%; flex: 1; position: relative;">
+        <!-- 2X Speed Boost Indicator Overlay -->
+        <div id="speed-boost-indicator" style="display: none; position: absolute; top: 1rem; left: 50%; transform: translateX(-50%); background: rgba(147, 51, 234, 0.9); color: #fff; padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.85rem; font-weight: 800; z-index: 9999; letter-spacing: 1px; box-shadow: 0 4px 15px rgba(147,51,234,0.6); border: 1px solid rgba(255,255,255,0.3);">
+          ⏩ 2.0X FAST FORWARDING
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Media Download Modal -->
+  <div class="modal-backdrop" id="modal-download">
+    <div class="modal-container" style="max-width: 520px;">
+      <button class="modal-close" onclick="closeModal('modal-download')">&times;</button>
+      <div style="padding: 2rem;">
+        <h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+          <span>⏬ Download Episode</span>
+        </h2>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;" id="download-media-title">Loading episode metadata...</p>
+
+        <div id="download-modal-content">
+          <div class="spinner"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WOX-Stream Cloud Account Modal -->
+  <div class="modal-backdrop" id="modal-login">
+    <div class="modal-container" style="max-width: 440px;">
+      <button class="modal-close" onclick="closeModal('modal-login')">&times;</button>
+      <div style="padding: 2rem;">
+        <div style="display: flex; gap: 1rem; border-bottom: 1px solid var(--border-glass); margin-bottom: 1.5rem; padding-bottom: 0.75rem;">
+          <span id="tab-auth-login" onclick="switchAuthTab('login')" style="font-size: 1.1rem; font-weight: 700; color: #fff; cursor: pointer; border-bottom: 2px solid var(--accent-cyan); padding-bottom: 0.25rem;">🔑 Sign In</span>
+          <span id="tab-auth-register" onclick="switchAuthTab('register')" style="font-size: 1.1rem; font-weight: 500; color: var(--text-muted); cursor: pointer; padding-bottom: 0.25rem;">✨ Create Account</span>
+        </div>
+
+        <!-- Login Form -->
+        <form id="form-auth-login" onsubmit="handleWoxLogin(event)" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div>
+            <label style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 0.4rem;">Username or Email</label>
+            <input type="text" id="login-identifier" required placeholder="Enter your username or email" class="search-input" style="padding-left: 1rem;">
+          </div>
+          <div>
+            <label style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 0.4rem;">Password</label>
+            <input type="password" id="login-password" required placeholder="Enter password" class="search-input" style="padding-left: 1rem;">
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; height: 44px; margin-top: 0.5rem;">
+            Sign In to WOX-Stream
+          </button>
+        </form>
+
+        <!-- Register Form -->
+        <form id="form-auth-register" onsubmit="handleWoxRegister(event)" style="display: none; flex-direction: column; gap: 1rem;">
+          <div>
+            <label style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 0.4rem;">Username</label>
+            <input type="text" id="reg-username" required placeholder="Choose a username" class="search-input" style="padding-left: 1rem;">
+          </div>
+          <div>
+            <label style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 0.4rem;">Email Address</label>
+            <input type="email" id="reg-email" required placeholder="name@example.com" class="search-input" style="padding-left: 1rem;">
+          </div>
+          <div>
+            <label style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 0.4rem;">Password</label>
+            <input type="password" id="reg-password" required placeholder="Create a strong password" class="search-input" style="padding-left: 1rem;">
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; height: 44px; margin-top: 0.5rem; background: linear-gradient(135deg, #9333ea, #ec4899);">
+            Create WOX Account
+          </button>
+        </form>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Drawer Modal -->
+  <div class="modal-backdrop" id="modal-settings">
+    <div class="modal-container" style="max-width: 500px;">
+      <button class="modal-close" onclick="closeModal('modal-settings')">&times;</button>
+      <div style="padding: 1.75rem;">
+        <h2 class="settings-modal-title">APPLICATION SETTINGS</h2>
+        
+        <div class="settings-list">
+          
+          <!-- Content Protection Section -->
+          <div class="settings-section">
+            <h3 class="settings-section-title cyan">CONTENT PROTECTION</h3>
+            
+            <div class="setting-item">
+              <span>Show 18+ Adult Rated Content</span>
+              <label class="switch">
+                <input type="checkbox" id="setting-allow-adult" onchange="toggleSetting('allowAdult', this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="setting-item">
+              <span>Block LGBT+ Content</span>
+              <label class="switch">
+                <input type="checkbox" id="setting-block-lgbt" onchange="toggleSetting('blockLgbt', this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="setting-item">
+              <span>Block 18+ / Erotic Content</span>
+              <label class="switch">
+                <input type="checkbox" id="setting-block-porno" onchange="toggleSetting('blockPorno', this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Playback & Audio Preferences -->
+          <div class="settings-section">
+            <h3 class="settings-section-title magenta">PLAYBACK & AUDIO</h3>
+
+            <div class="setting-item">
+              <span>Auto-Play Next Episode</span>
+              <label class="switch">
+                <input type="checkbox" id="setting-autoboot" onchange="toggleSetting('autoboot', this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="setting-item">
+              <span>Interface Language</span>
+              <select id="setting-language-select" class="setting-val-select" onchange="handleLanguageChange(this.value)">
+                <option value="en" selected>English (US)</option>
+                <option value="id">Indonesian (ID)</option>
+                <option value="vi">Vietnamese (VI)</option>
+                <option value="th">Thai (TH)</option>
+                <option value="es">Spanish (ES)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Storage & Gateway Info -->
+          <div class="settings-section">
+            <h3 class="settings-section-title muted">STORAGE & GATEWAY</h3>
+
+            <div class="setting-item clickable" onclick="handleClearCache()">
+              <span>Clear Image & Data Cache</span>
+              <span class="setting-val gold" id="cache-size-text">Calculating... &gt;</span>
+            </div>
+
+            <div class="setting-item clickable" onclick="openPrivacyCenter()">
+              <span>Gateway Security & Encryption</span>
+              <span class="setting-val cyan">RSA-1024 / AES-128 &gt;</span>
+            </div>
+
+            <div class="setting-item clickable" onclick="openModal('modal-dmca')">
+              <span>Legal & DMCA Disclaimer</span>
+              <span class="setting-val gold">Safe Harbor Notice &gt;</span>
+            </div>
+
+            <div class="setting-item">
+              <span>WOX Desktop Client Version</span>
+              <span class="setting-val muted">1.37.0.5</span>
+            </div>
+          </div>
+
+        </div>
+
+        <div id="setting-logout-container" class="settings-logout-wrap">
+          <button class="btn btn-logout" id="setting-logout-btn" onclick="handleLogout()">SIGN OUT</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Age Gate Modal -->
+  <div class="modal-backdrop" id="modal-age-gate" style="z-index: 10005;">
+    <div class="modal-container" style="max-width: 420px; text-align: center; border: 1px solid var(--accent-magenta); margin: auto;">
+      <div class="modal-body" style="padding: 2rem 1.5rem;">
+        <h2 style="font-family: 'Orbitron', sans-serif; color: #FF3366; font-size: 1.4rem; margin-bottom: 1rem;">🔞 AGE VERIFICATION</h2>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; line-height: 1.5;">
+          You are enabling Adult (18+) content access. Please confirm that you are at least 18 years of age or legal adult age in your jurisdiction.
+        </p>
+        <div style="display: flex; gap: 0.75rem; justify-content: center;">
+          <button class="btn btn-glass" onclick="confirmAgeGate(false)" style="flex:1;">CANCEL</button>
+          <button class="btn btn-primary" onclick="confirmAgeGate(true)" style="flex:1; background: #FF3366; border-color: #FF3366; font-weight: 700;">I AM 18+</button>
+        </div>
+      </div>
+    </div>
+  <!-- DMCA & Content Disclaimer Modal -->
+  <div class="modal-backdrop" id="modal-dmca" style="z-index: 10006;">
+    <div class="modal-container" style="max-width: 540px; margin: auto; border: 1px solid var(--accent-gold);">
+      <button class="modal-close" onclick="closeModal('modal-dmca')">&times;</button>
+      <div class="modal-body" style="padding: 2rem 1.75rem;">
+        <h2 style="font-family: 'Orbitron', sans-serif; color: #fbbf24; font-size: 1.3rem; margin-bottom: 1rem;">⚖️ LEGAL & DMCA SAFE HARBOR NOTICE</h2>
+        <div style="color: var(--text-muted); font-size: 0.88rem; line-height: 1.6; max-height: 340px; overflow-y: auto; text-align: left; padding-right: 0.5rem; margin-bottom: 1.5rem;">
+          <p style="margin-bottom: 1rem;">
+            <strong>WOX-Stream</strong> operates strictly as an automated media catalog index and client interface. <strong>We do not host, store, upload, or transmit any video files, media content, or copyright-protected material</strong> on our servers.
+          </p>
+          <p style="margin-bottom: 1rem;">
+            All video playback links, media metadata, posters, and streams displayed within this application are dynamically aggregated from public third-party indexing endpoints and open web APIs over which WOX-Stream exercises no control.
+          </p>
+          <p style="margin-bottom: 1rem;">
+            WOX-Stream complies with the Digital Millennium Copyright Act (DMCA) and international Safe Harbor provisions. If you believe your copyrighted work is accessible through third-party indexing, please direct removal requests to the hosting provider or source endpoint directly.
+          </p>
+        </div>
+        <button class="btn btn-primary" onclick="closeModal('modal-dmca')" style="width: 100%; justify-content: center; background: #fbbf24; color: #000; font-weight: 700; border: none;">I UNDERSTAND</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
