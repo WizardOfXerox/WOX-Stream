@@ -162,6 +162,7 @@ module.exports = async (req, res) => {
       }
 
       let rawResults = [];
+      let debugInfo = { ok: false, error: null, count: 0, code: null };
       try {
         const data = await loklokFetch('/search/v1/searchWithKeyWord', {
           method: 'POST',
@@ -173,10 +174,17 @@ module.exports = async (req, res) => {
             searchType: ''
           })
         });
+        if (data) {
+          debugInfo.code = data.code;
+          debugInfo.msg = data.msg;
+        }
         if (data && data.data && Array.isArray(data.data.searchResults)) {
           rawResults = data.data.searchResults;
+          debugInfo.ok = true;
+          debugInfo.count = rawResults.length;
         }
       } catch (err) {
+        debugInfo.error = err.message;
         console.error('Loklok searchWithKeyWord fetch failed:', err.message);
       }
       
@@ -343,7 +351,7 @@ module.exports = async (req, res) => {
         return 0;
       });
 
-      return res.status(200).json({ success: true, results });
+      return res.status(200).json({ success: true, results, debugInfo });
 
     } else {
       // Category multi-filter search API
