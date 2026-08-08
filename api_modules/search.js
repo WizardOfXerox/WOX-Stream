@@ -169,7 +169,7 @@ module.exports = async (req, res) => {
           headers: { ...headers, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             searchKeyWord: keyword.trim(),
-            size: 30,
+            size: 50,
             sort: '',
             searchType: ''
           })
