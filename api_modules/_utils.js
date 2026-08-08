@@ -60,10 +60,10 @@ const GUEST_DEVICE_ID = '60A3305FDAAC489AAF4C7DD33B1483B4';
 function getLoklokHeaders(token = '') {
   const cleanToken = sanitizeToken(token);
   const pool = [
-    `112.198.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
+    `171.96.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
+    `171.97.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
     `120.28.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
-    `180.190.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
-    `110.54.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`
+    `180.191.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`
   ];
   const ip = pool[Math.floor(Math.random() * pool.length)];
 
@@ -155,13 +155,13 @@ async function loklokFetch(endpoint, options = {}) {
   const defaultHeaders = getLoklokHeaders(options.token || '');
   const headers = { ...defaultHeaders, ...(options.headers || {}) };
 
-  // 1. Direct fetch attempt with 1s timeout
+  // 1. Direct fetch attempt with 4.5s timeout
   try {
     const res = await fetch(url, {
       method: options.method || 'GET',
       headers,
       body: options.body,
-      signal: AbortSignal.timeout(1000)
+      signal: AbortSignal.timeout(4500)
     });
     if (res.ok) {
       const data = await res.json();
