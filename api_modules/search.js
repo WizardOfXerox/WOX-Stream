@@ -253,7 +253,32 @@ module.exports = async (req, res) => {
         } catch (_) {}
       }
 
+      // Filter out irrelevant third-party results that don't match any search keyword terms
+      const queryWords = keyword.trim().toLowerCase().split(/\s+/).filter(w => w.length > 1);
+      if (queryWords.length > 0) {
+        results = results.filter(item => {
+          // Always keep official Loklok HD search results
+          if (!item.isNarto && item.sourceName === 'Loklok HD') return true;
+          const tLower = String(item.title || '').toLowerCase();
+          return queryWords.some(w => tLower.includes(w));
+        });
+      }
+
       results = deduplicateResults(results);
+
+      // Relevancy Sorting: exact matches & substring matches first
+      const qLower = keyword.trim().toLowerCase();
+      results.sort((a, b) => {
+        const aTitle = String(a.title || '').toLowerCase();
+        const bTitle = String(b.title || '').toLowerCase();
+
+        const aExact = aTitle === qLower ? 4 : (aTitle.startsWith(qLower) ? 3 : (aTitle.includes(qLower) ? 2 : 0));
+        const bExact = bTitle === qLower ? 4 : (bTitle.startsWith(qLower) ? 3 : (bTitle.includes(qLower) ? 2 : 0));
+
+        if (aExact !== bExact) return bExact - aExact;
+        return 0;
+      });
+
       return res.status(200).json({ success: true, results });
 
     } else {
