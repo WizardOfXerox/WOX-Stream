@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "https-proxy-agent": "^9.1.0",
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^2.7.0",
+    "undici": "^8.10.0"
   },
   "engines": {
     "node": ">=18"

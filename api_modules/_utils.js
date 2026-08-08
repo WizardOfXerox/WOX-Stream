@@ -139,28 +139,54 @@ function fixCoverUrl(url) {
   }
 }
 
+const { ProxyAgent } = require('undici');
+
+const phProxyList = [
+  'http://43.133.128.153:16012',
+  'http://43.109.48.180:9999',
+  'http://103.82.20.76:8080'
+];
+
 async function loklokFetch(endpoint, options = {}) {
   const targetBase = 'https://ga-mobile-api.loklok.tv/cms/app';
   const url = endpoint.startsWith('http') ? endpoint : `${targetBase}${endpoint}`;
+  const isSearch = endpoint.includes('searchWithKeyWord') || endpoint.includes('search');
   const defaultHeaders = getLoklokHeaders(options.token || '');
   const headers = { ...defaultHeaders, ...(options.headers || {}) };
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 6000);
 
+  // 1. Direct fetch attempt with 1s timeout
   try {
-    const response = await fetch(url, {
+    const res = await fetch(url, {
       method: options.method || 'GET',
       headers,
       body: options.body,
-      signal: controller.signal
+      signal: AbortSignal.timeout(1000)
     });
-    clearTimeout(timeout);
-    if (response.ok) {
-      const data = await response.json();
-      if (data) return data;
+    if (res.ok) {
+      const data = await res.json();
+      const count = (data && data.data && Array.isArray(data.data.searchResults)) ? data.data.searchResults.length : 0;
+      if (!isSearch || count > 1) return data;
     }
-  } catch (_) {
-    clearTimeout(timeout);
+  } catch (_) {}
+
+  // 2. Asian Consumer Proxy dispatch via Undici ProxyAgent
+  for (const pUrl of phProxyList) {
+    try {
+      const dispatcher = new ProxyAgent(pUrl);
+      const res = await fetch(url, {
+        method: options.method || 'GET',
+        headers,
+        body: options.body,
+        dispatcher,
+        signal: AbortSignal.timeout(2000)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.data && Array.isArray(data.data.searchResults) && data.data.searchResults.length > 0) {
+          return data;
+        }
+      }
+    } catch (_) {}
   }
 
   return { code: '00000', data: { searchResults: [] } };
