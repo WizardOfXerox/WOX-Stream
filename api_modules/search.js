@@ -162,21 +162,26 @@ module.exports = async (req, res) => {
         });
       }
 
-      // Full search path
-      const searchRes = await fetch(`${LOKLOK_API_BASE}/search/v1/searchWithKeyWord`, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          searchKeyWord: keyword.trim(),
-          size: 30,
-          sort: '',
-          searchType: ''
-        }),
-        signal: AbortSignal.timeout(5000)
-      });
-      const data = await searchRes.json();
-
-      const rawResults = (data.data && data.data.searchResults) ? data.data.searchResults : [];
+      let rawResults = [];
+      try {
+        const searchRes = await fetch(`${LOKLOK_API_BASE}/search/v1/searchWithKeyWord`, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            searchKeyWord: keyword.trim(),
+            size: 30,
+            sort: '',
+            searchType: ''
+          }),
+          signal: AbortSignal.timeout(5000)
+        });
+        const data = await searchRes.json();
+        if (data && data.data && Array.isArray(data.data.searchResults)) {
+          rawResults = data.data.searchResults;
+        }
+      } catch (err) {
+        console.error('Loklok searchWithKeyWord fetch failed:', err.message);
+      }
       
       // Filter Loklok HD results so fuzzy/related items (like "Found" or "The Founder") don't pollute keyword results
       const qWords = keyword.trim().toLowerCase().split(/\s+/).filter(w => w.length > 1);
