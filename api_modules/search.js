@@ -78,10 +78,11 @@ module.exports = async (req, res) => {
 
           if (loklokRes.status === 'fulfilled' && loklokRes.value && loklokRes.value.data && loklokRes.value.data.searchResults) {
             loklokRes.value.data.searchResults.forEach(item => {
+              const itemTitle = item.name || item.title || 'Untitled';
               fastResults.push({
                 id: maskId('loklok', item.id),
                 category: String(item.category || item.domainType || '1'),
-                title: item.name || item.title || 'Untitled',
+                title: itemTitle,
                 cover: fixCoverUrl(item.coverVerticalUrl || item.imageUrl || item.cover || ''),
                 score: item.score || null,
                 domainType: item.domainType,
