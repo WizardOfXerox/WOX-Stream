@@ -203,7 +203,12 @@ module.exports = async (req, res) => {
             const h5Res = await fetch(gateUrl, {
               headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9'
+                'Accept-Language': 'en-US,en;q=0.9',
+                'X-Forwarded-For': '171.96.12.34',
+                'X-Real-IP': '171.96.12.34',
+                'clientip': '171.96.12.34',
+                'True-Client-IP': '171.96.12.34',
+                'CF-Connecting-IP': '171.96.12.34'
               },
               signal: AbortSignal.timeout(8000)
             });
