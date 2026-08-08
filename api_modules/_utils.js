@@ -140,12 +140,43 @@ function fixCoverUrl(url) {
   }
 }
 
+const { HttpsProxyAgent } = require('https-proxy-agent');
+
+const ASIAN_PROXIES = [
+  'http://43.109.48.180:9999',
+  'http://43.133.128.153:16012',
+  'http://103.82.20.76:8080',
+  'http://43.251.205.146:8080'
+];
+
 async function loklokFetch(endpoint, options = {}) {
   const url = endpoint.startsWith('http') ? endpoint : `${LOKLOK_API_BASE}${endpoint}`;
-  const fetchOpts = { signal: AbortSignal.timeout(6000), ...options };
-  const response = await fetch(url, fetchOpts);
-  const data = await response.json();
-  return data;
+  const isSearch = endpoint.includes('searchWithKeyWord') || endpoint.includes('search');
+  const fetchOpts = { signal: AbortSignal.timeout(5000), ...options };
+  
+  try {
+    const response = await fetch(url, fetchOpts);
+    const data = await response.json();
+    const count = (data && data.data && Array.isArray(data.data.searchResults)) ? data.data.searchResults.length : 0;
+    if (!isSearch || count > 1) {
+      return data;
+    }
+  } catch (_) {}
+
+  // Fallback: Query through Asian proxies via HttpsProxyAgent
+  for (const proxyUrl of ASIAN_PROXIES) {
+    try {
+      const agent = new HttpsProxyAgent(proxyUrl);
+      const proxyOpts = { signal: AbortSignal.timeout(5000), agent, ...options };
+      const response = await fetch(url, proxyOpts);
+      const data = await response.json();
+      if (data && data.data && Array.isArray(data.data.searchResults) && data.data.searchResults.length > 0) {
+        return data;
+      }
+    } catch (_) {}
+  }
+
+  return { code: '00000', data: { searchResults: [] } };
 }
 
 // --- WOX MASKING GATEWAY UTILITIES ---
