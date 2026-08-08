@@ -59,14 +59,6 @@ const GUEST_DEVICE_ID = '60A3305FDAAC489AAF4C7DD33B1483B4';
 // Get headers for Loklok API (requires valid Android Tem3 client signature)
 function getLoklokHeaders(token = '') {
   const cleanToken = sanitizeToken(token);
-  const pool = [
-    `120.28.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
-    `112.198.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
-    `180.190.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
-    `110.54.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
-    `203.177.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`
-  ];
-  const ip = pool[Math.floor(Math.random() * pool.length)];
 
   // Create deterministic deviceid from token if available, otherwise stable guest device id
   const deviceId = cleanToken 
@@ -79,18 +71,7 @@ function getLoklokHeaders(token = '') {
     'versioncode': '33',
     'clienttype': 'android_tem3',
     'deviceid': deviceId,
-    'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 12)',
-    'X-Forwarded-For': ip,
-    'X-Real-IP': ip,
-    'clientip': ip,
-    'True-Client-IP': ip,
-    'CF-Connecting-IP': ip,
-    'X-Client-IP': ip,
-    'X-Originating-IP': ip,
-    'X-Remote-IP': ip,
-    'X-Remote-Addr': ip,
-    'Fastly-Client-IP': ip,
-    'Forwarded': `for=${ip};proto=https`
+    'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 12)'
   };
 
   if (cleanToken) {
