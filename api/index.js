@@ -1,10 +1,16 @@
 const path = require('path');
+const url = require('url');
 
 // Single Vercel Serverless Function entry point
 module.exports = async (req, res) => {
-  const matchedPath = req.headers['x-matched-path'] || req.url || '/api/home';
-  const rawPath = matchedPath.split('?')[0];
-  let pathname = rawPath.replace(/^\/api\/?/, '');
+  const reqUrl = req.url || '';
+  const parsed = url.parse(reqUrl, true);
+  
+  let pathname = (req.query && req.query.pathname) || (parsed.query && parsed.query.pathname);
+  if (!pathname) {
+    const rawPath = (req.headers['x-matched-path'] || parsed.pathname || '/api/home').split('?')[0];
+    pathname = rawPath.replace(/^\/api\/?/, '');
+  }
 
   if (!pathname || pathname === 'index') pathname = 'home';
   if (pathname.includes('/')) pathname = pathname.split('/')[0];
@@ -14,8 +20,8 @@ module.exports = async (req, res) => {
     const handler = require(handlerPath);
     return await handler(req, res);
   } catch (err) {
-    console.error(`Dynamic API Routing Error for [${pathname}] (rawPath: ${rawPath}):`, err.stack || err.message);
+    console.error(`Dynamic API Routing Error for [${pathname}]:`, err.message);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    return res.status(404).json({ success: false, error: `API Route /api/${pathname} not found`, message: err.message });
+    return res.status(404).json({ success: false, error: `API Route /api/${pathname} not found` });
   }
 };
