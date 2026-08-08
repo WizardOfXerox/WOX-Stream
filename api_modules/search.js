@@ -75,44 +75,50 @@ async function h5ApiSearch(keyword) {
   const cfProxy = 'https://wox-stream-proxy.wizardofxerox.workers.dev/?url=';
 
   for (const host of hosts) {
-    try {
-      const targetEndpoint = `${host}/cms/v2/h5/search/searchWithKeyWord`;
-      const proxyUrl = `${cfProxy}${encodeURIComponent(targetEndpoint)}`;
-      const res = await fetch(proxyUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'sign': sign,
-          'aesKey': aesKey,
-          'currentTime': currentTime.toString(),
-          'clientType': 'H5',
-          'versionCode': '32',
-          'lang': 'en',
-          'deviceid': h5GenKey(32),
-          'timezone': `GMT${tz < 0 ? tz : '+' + tz}`,
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Referer': 'https://h5.loklok.site/',
-          'Origin': 'https://h5.loklok.site'
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(10000)
-      });
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (data.code === '00000') {
-        const results = (data.data && data.data.searchResults) || (Array.isArray(data.data) ? data.data : []);
-        if (results.length > 0) {
-          return results.map(item => ({
-            id: String(item.id),
-            name: item.name || item.title,
-            coverVerticalUrl: item.coverVerticalUrl || item.coverHorizontalUrl || '',
-            domainType: item.domainType,
-            score: item.score || '8.5'
-          }));
+    const targetEndpoint = `${host}/cms/v2/h5/search/searchWithKeyWord`;
+    const urlsToTry = [
+      targetEndpoint,
+      `${cfProxy}${encodeURIComponent(targetEndpoint)}`
+    ];
+
+    for (const url of urlsToTry) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'sign': sign,
+            'aesKey': aesKey,
+            'currentTime': currentTime.toString(),
+            'clientType': 'H5',
+            'versionCode': '32',
+            'lang': 'en',
+            'deviceid': h5GenKey(32),
+            'timezone': `GMT${tz < 0 ? tz : '+' + tz}`,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'https://h5.loklok.site/',
+            'Origin': 'https://h5.loklok.site'
+          },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(10000)
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (data.code === '00000') {
+          const results = (data.data && data.data.searchResults) || (Array.isArray(data.data) ? data.data : []);
+          if (results.length > 0) {
+            return results.map(item => ({
+              id: String(item.id),
+              name: item.name || item.title,
+              coverVerticalUrl: item.coverVerticalUrl || item.coverHorizontalUrl || '',
+              domainType: item.domainType,
+              score: item.score || '8.5'
+            }));
+          }
         }
+      } catch (err) {
+        console.error('h5ApiSearch error with', url, ':', err.message);
       }
-    } catch (err) {
-      console.error('h5ApiSearch error with', host, ':', err.message);
     }
   }
   return [];
