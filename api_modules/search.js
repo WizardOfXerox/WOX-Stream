@@ -1,5 +1,116 @@
-const vm = require('vm');
+const crypto = require('crypto');
 const { getLoklokHeaders, getNartoHeaders, setCorsHeaders, fixCoverUrl, LOKLOK_API_BASE, sanitizeToken, maskId, loklokFetch } = require('./_utils');
+
+// ===== Reverse-Engineered H5 Web API Signed Client =====
+// Extracted from h5.loklok.site Nuxt 3 bundle (entry.4f52e398.js)
+// This JSON API is NOT IP-blocked — only signature-protected.
+
+const H5_RSA_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC7GW1zgx9/ssgCjoZhuCvISy5N
+s9T2UgAzjJqS2uTGuCVtZsN3TE5wd4OIeiVG2TVDH2Gxlzrxd5jg7P6IiUKqsli
+SdZxx/ceqLDawKgvO8mJ+hJJsuIxSL7Bi6T0p+xH6ibw4orGfCFUJhGryE9hqp9q
+TRiHOMvgC2si1VqrgaQIDAQAB
+-----END PUBLIC KEY-----`;
+
+function h5GenKey(len = 16) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let r = '';
+  for (let i = 0; i < len; i++) r += chars.charAt(Math.floor(Math.random() * 62));
+  return r;
+}
+
+function h5ConvertObj(obj = {}, sorted = false) {
+  const pairs = [];
+  for (const key in obj) {
+    const val = obj[key];
+    if (val == null) continue;
+    if (Array.isArray(val)) {
+      val.forEach((v, idx) => {
+        if (typeof v === 'object' && v !== null) pairs.push(key + '=' + h5ConvertObj(v, true));
+        else pairs.push(key + '[' + idx + ']=' + v);
+      });
+    } else if (typeof val === 'object') {
+      pairs.push(key + '=' + h5ConvertObj(val, true));
+    } else {
+      pairs.push(key + '=' + val);
+    }
+  }
+  if (sorted) {
+    const grouped = {};
+    pairs.forEach(p => {
+      const [k, ...rest] = p.split('=');
+      const v = rest.join('=');
+      grouped[k] ? grouped[k].push(v) : (grouped[k] = [v]);
+    });
+    return Object.keys(grouped).sort().map(k => grouped[k].join('')).join('');
+  }
+  return pairs.map(p => p.substring(p.indexOf('=') + 1)).join('');
+}
+
+function h5GetSign(data, randomKey, timestamp) {
+  const encoded = Buffer.from(h5ConvertObj(data, true), 'utf8').toString('base64');
+  const raw = `${timestamp}${encoded}`.replace(/[+]/g, '-').replace(/\//g, '_');
+  const cipher = crypto.createCipheriv('aes-128-ecb', Buffer.from(randomKey, 'utf8'), null);
+  const encrypted = cipher.update(raw, 'utf8', 'base64') + cipher.final('base64');
+  return crypto.createHash('md5').update(encrypted).digest('hex');
+}
+
+function h5RsaEncrypt(data) {
+  return crypto.publicEncrypt(
+    { key: H5_RSA_PUBLIC_KEY, padding: crypto.constants.RSA_PKCS1_PADDING },
+    Buffer.from(data, 'utf8')
+  ).toString('base64');
+}
+
+async function h5ApiSearch(keyword) {
+  if (!keyword || !keyword.trim()) return [];
+  const randomKey = h5GenKey(16);
+  const currentTime = Date.now();
+  const body = { searchKeyWord: keyword.trim(), size: 50, sort: '', searchType: '' };
+  const sign = h5GetSign(body, randomKey, currentTime);
+  const aesKey = h5RsaEncrypt(randomKey);
+  const tz = 0 - new Date().getTimezoneOffset() / 60;
+
+  const hosts = ['https://h5-api.loklok.site', 'https://h5-api.hehekang.com'];
+  for (const host of hosts) {
+    try {
+      const res = await fetch(`${host}/cms/v2/h5/search/searchWithKeyWord`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'sign': sign,
+          'aesKey': aesKey,
+          'currentTime': currentTime.toString(),
+          'clientType': 'H5',
+          'versionCode': '32',
+          'lang': 'en',
+          'deviceid': h5GenKey(32),
+          'timezone': `GMT${tz < 0 ? tz : '+' + tz}`,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': 'https://h5.loklok.site/',
+          'Origin': 'https://h5.loklok.site'
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(10000)
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.code === '00000') {
+        const results = (data.data && data.data.searchResults) || (Array.isArray(data.data) ? data.data : []);
+        if (results.length > 0) {
+          return results.map(item => ({
+            id: String(item.id),
+            name: item.name || item.title,
+            coverVerticalUrl: item.coverVerticalUrl || item.coverHorizontalUrl || '',
+            domainType: item.domainType,
+            score: item.score || '8.5'
+          }));
+        }
+      }
+    } catch (_) {}
+  }
+  return [];
+}
 
 function cleanTitle(t) {
   return String(t || '')
@@ -40,61 +151,6 @@ function deduplicateResults(items) {
   return Array.from(map.values());
 }
 
-async function scrapeH5GatewaySearch(keyword) {
-  if (!keyword || !keyword.trim()) return [];
-  const h5Gateways = [
-    `https://h5.loklok.site/search?keyword=${encodeURIComponent(keyword.trim())}`,
-    `https://h5.decryptplan.com/search?keyword=${encodeURIComponent(keyword.trim())}`,
-    `https://h5.netpop.app/search?keyword=${encodeURIComponent(keyword.trim())}`
-  ];
-
-  for (const gateUrl of h5Gateways) {
-    try {
-      const res = await fetch(gateUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9'
-        },
-        signal: AbortSignal.timeout(15000)
-      });
-      if (!res.ok) continue;
-      const html = await res.text();
-      const scripts = Array.from(html.matchAll(/<script[^>]*>(.*?)<\/script>/gs)).map(m => m[1]);
-      const dataScript = scripts.find(s => s.includes('Reactive'));
-      if (dataScript) {
-        const sandbox = { result: null };
-        vm.runInNewContext('result = ' + dataScript, sandbox);
-        const arr = sandbox.result;
-        if (Array.isArray(arr)) {
-          const h5Items = [];
-          for (let i = 0; i < arr.length; i++) {
-            const obj = arr[i];
-            if (obj && typeof obj === 'object' && !Array.isArray(obj) && typeof obj.name === 'number' && (typeof obj.coverVerticalUrl === 'number' || typeof obj.coverHorizontalUrl === 'number') && typeof obj.id === 'number') {
-              const name = arr[obj.name];
-              const cover = (typeof obj.coverVerticalUrl === 'number' ? arr[obj.coverVerticalUrl] : null) || (typeof obj.coverHorizontalUrl === 'number' ? arr[obj.coverHorizontalUrl] : null) || '';
-              const id = arr[obj.id];
-              const domainType = (typeof obj.domainType === 'number' ? arr[obj.domainType] : null) || obj.domainType;
-              const score = (typeof obj.score === 'number' ? arr[obj.score] : null) || obj.score || '8.5';
-              if (typeof name === 'string' && id) {
-                h5Items.push({
-                  id: String(id),
-                  name: name,
-                  coverVerticalUrl: cover,
-                  domainType: (domainType === 1 || domainType === 'TV') ? 1 : 0,
-                  score: String(score)
-                });
-              }
-            }
-          }
-          if (h5Items.length > 0) return h5Items;
-        }
-      }
-    } catch (_) {}
-  }
-  return [];
-}
-
 module.exports = async (req, res) => {
   setCorsHeaders(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -119,7 +175,7 @@ module.exports = async (req, res) => {
       if (isFast) {
         let fastResults = [];
         try {
-          const h5Items = await scrapeH5GatewaySearch(keyword);
+          const h5Items = await h5ApiSearch(keyword);
           if (h5Items && h5Items.length > 0) {
             h5Items.forEach(item => {
               fastResults.push({
@@ -240,7 +296,7 @@ module.exports = async (req, res) => {
       // 1. Query H5 Gateway SSR Scraper first (Unrestricted Global Access)
       if (keyword && keyword.trim()) {
         try {
-          const h5Results = await scrapeH5GatewaySearch(keyword);
+          const h5Results = await h5ApiSearch(keyword);
           if (h5Results && h5Results.length > 0) {
             rawResults = h5Results;
             debugInfo.ok = true;
