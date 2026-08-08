@@ -59,6 +59,13 @@ const GUEST_DEVICE_ID = '60A3305FDAAC489AAF4C7DD33B1483B4';
 // Get headers for Loklok API (requires valid Android Tem3 client signature)
 function getLoklokHeaders(token = '') {
   const cleanToken = sanitizeToken(token);
+  const pool = [
+    `112.198.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
+    `120.28.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
+    `180.190.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
+    `110.54.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`
+  ];
+  const ip = pool[Math.floor(Math.random() * pool.length)];
 
   // Create deterministic deviceid from token if available, otherwise stable guest device id
   const deviceId = cleanToken 
@@ -71,7 +78,10 @@ function getLoklokHeaders(token = '') {
     'versioncode': '33',
     'clienttype': 'android_tem3',
     'deviceid': deviceId,
-    'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 12)'
+    'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 12)',
+    'clientip': ip,
+    'x-forwarded-for': ip,
+    'x-real-ip': ip
   };
 
   if (cleanToken) {
