@@ -266,16 +266,28 @@ module.exports = async (req, res) => {
 
       results = deduplicateResults(results);
 
-      // Relevancy Sorting: exact matches & substring matches first
+      // Relevancy Sorting: exact matches & word-boundary matches first
       const qLower = keyword.trim().toLowerCase();
+      const wordRegex = new RegExp('\\b' + qLower.replace(/[^a-z0-9]/g, '') + '\\b', 'i');
+
       results.sort((a, b) => {
         const aTitle = String(a.title || '').toLowerCase();
         const bTitle = String(b.title || '').toLowerCase();
+        const aClean = aTitle.replace(/[^a-z0-9\s]/g, '');
+        const bClean = bTitle.replace(/[^a-z0-9\s]/g, '');
 
-        const aExact = aTitle === qLower ? 4 : (aTitle.startsWith(qLower) ? 3 : (aTitle.includes(qLower) ? 2 : 0));
-        const bExact = bTitle === qLower ? 4 : (bTitle.startsWith(qLower) ? 3 : (bTitle.includes(qLower) ? 2 : 0));
+        const getScore = (t, tClean) => {
+          if (t === qLower || tClean === qLower) return 10;
+          if (t.startsWith(qLower)) return 8;
+          if (wordRegex.test(tClean)) return 6;
+          if (t.includes(qLower)) return 4;
+          return 0;
+        };
 
-        if (aExact !== bExact) return bExact - aExact;
+        const aScore = getScore(aTitle, aClean);
+        const bScore = getScore(bTitle, bClean);
+
+        if (aScore !== bScore) return bScore - aScore;
         return 0;
       });
 
