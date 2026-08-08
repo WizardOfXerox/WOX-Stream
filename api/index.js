@@ -22,8 +22,8 @@ module.exports = async (req, res) => {
     const handler = require(handlerPath);
     return await handler(req, res);
   } catch (err) {
-    console.error(`Dynamic API Routing Error for [${pathname}] (req.url: ${reqUrl}):`, err.message);
+    console.error(`Dynamic API Routing Error for [${pathname}] (req.url: ${reqUrl}):`, err.stack || err.message);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    return res.status(404).json({ success: false, error: `API Route /api/${pathname} not found`, reqUrl: reqUrl });
+    return res.status(404).json({ success: false, error: `API Route /api/${pathname} not found`, reqUrl: reqUrl, errMsg: err.message });
   }
 };
