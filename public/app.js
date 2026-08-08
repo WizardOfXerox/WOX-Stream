@@ -3033,8 +3033,7 @@ window.handleSearchKeyUp = function(e) {
       }).join('');
       dropdown.style.display = 'block';
     } else {
-      dropdown.innerHTML = '<div style="padding:0.85rem;color:var(--text-muted);font-size:0.85rem;text-align:center;">No matching titles found</div>';
-      dropdown.style.display = 'block';
+      dropdown.style.display = 'none';
     }
   }
 
