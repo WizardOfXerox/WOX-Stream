@@ -67,19 +67,15 @@ module.exports = async (req, res) => {
       }
     }
 
-    const loklokSectionsCount = resultSections.length;
-
-    // Fallback: If Loklok home endpoint returned 0 Loklok items (e.g. cloud hosting IP restrictions), populate from Loklok catalog search
-    if (loklokSectionsCount === 0) {
+    // If Loklok home endpoint returned 0 Loklok items (e.g. cloud hosting IP restrictions), populate from Loklok catalog search
+    if (resultSections.length === 0) {
       try {
-        const searchUrl = `${LOKLOK_API_BASE}/search/v1/search`;
-        const searchRes = await fetch(searchUrl, {
+        const searchRes = await loklokFetch('/search/v1/search', {
           method: 'POST',
           headers: { ...headers, 'Content-Type': 'application/json' },
           body: JSON.stringify({ size: 24, params: 'MOVIE,TV,VARIETY,COMIC,DOCUMENTARY', area: '', category: '', year: '', order: 'count', sort: '' })
         });
-        const searchData = await searchRes.json();
-        const searchResults = (searchData && searchData.data && Array.isArray(searchData.data.searchResults)) ? searchData.data.searchResults : [];
+        const searchResults = (searchRes && searchRes.data && Array.isArray(searchRes.data.searchResults)) ? searchRes.data.searchResults : [];
 
         if (searchResults.length > 0) {
           const loklokItems = searchResults.map(item => ({
