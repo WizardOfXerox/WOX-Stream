@@ -72,34 +72,39 @@ module.exports = async (req, res) => {
     // Fallback: If Loklok home endpoint returned 0 Loklok items (e.g. cloud hosting IP restrictions), populate from Loklok catalog search
     if (loklokSectionsCount === 0) {
       try {
-        const fallbackRes = await fetch(`${LOKLOK_API_BASE}/search/v1/search`, {
+        const searchUrl = `${LOKLOK_API_BASE}/search/v1/search`;
+        const searchRes = await fetch(searchUrl, {
           method: 'POST',
           headers: { ...headers, 'Content-Type': 'application/json' },
           body: JSON.stringify({ size: 24, params: 'MOVIE,TV,VARIETY,COMIC,DOCUMENTARY', area: '', category: '', year: '', order: 'count', sort: '' })
         });
-        const fallbackData = await fallbackRes.json();
-        if (fallbackData.data && Array.isArray(fallbackData.data.searchResults) && fallbackData.data.searchResults.length > 0) {
-          const loklokItems = fallbackData.data.searchResults.map(item => ({
+        const searchData = await searchRes.json();
+        const searchResults = (searchData && searchData.data && Array.isArray(searchData.data.searchResults)) ? searchData.data.searchResults : [];
+
+        if (searchResults.length > 0) {
+          const loklokItems = searchResults.map(item => ({
             id: maskId('loklok', item.id),
             category: String(item.category || item.domainType || '1'),
-            title: item.name || item.title || 'Untitled',
+            title: item.title || item.name || item.videoName || 'Untitled',
             cover: fixCoverUrl(item.coverVerticalUrl || item.imageUrl || item.cover || ''),
             score: item.score || null,
             domainType: item.domainType
           }));
 
-          resultSections.push({
-            title: '🔥 TRENDING MOVIES & SHOWS',
+          resultSections.unshift({
+            title: '🔥 TRENDING LOKLOK MOVIES & SHOWS',
             type: 'SINGLE_ALBUM',
             items: loklokItems.slice(0, 12)
           });
-          resultSections.push({
-            title: '✨ POPULAR RELEASES',
+          resultSections.unshift({
+            title: '✨ POPULAR LOKLOK RELEASES',
             type: 'SINGLE_ALBUM',
             items: loklokItems.slice(12, 24)
           });
         }
-      } catch (_) {}
+      } catch (err) {
+        console.error('Loklok search fallback error on home:', err.message);
+      }
     }
 
     // Concurrently fetch multi-source shelves (Asian Short Dramas, Classics, Adult Anime)
