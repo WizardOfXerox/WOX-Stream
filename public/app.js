@@ -2933,7 +2933,12 @@ function renderWoxCard(item, isHighPriority = false) {
   const cleanTitle = String(item.title || '').replace(/^\[narto\]\s*/i, '').trim();
   const itemJson = JSON.stringify({ id: item.id, category: item.category || 1, title: cleanTitle, cover: item.cover, score: item.score || '8.5' }).replace(/"/g, '&quot;');
   
-  const yearText = item.year || item.area || (item.domainType || 'HD');
+  let domainLabel = 'HD';
+  if (item.domainType === 0 || item.domainType === '0') domainLabel = 'MOVIE';
+  else if (item.domainType === 1 || item.domainType === '1') domainLabel = 'TV';
+  else if (typeof item.domainType === 'string' && item.domainType.length > 1) domainLabel = item.domainType;
+
+  const yearText = item.year || item.area || domainLabel;
 
   return `
     <div class="loklok-card" onclick="openDetailModal('${item.id}', '${item.category || 1}')">
@@ -2941,7 +2946,7 @@ function renderWoxCard(item, isHighPriority = false) {
         <img class="card-poster-img" src="${item.cover}" alt="${escapeHtml(cleanTitle)}" decoding="async" ${isHighPriority ? 'fetchpriority="high"' : 'loading="lazy"'} onerror="handleImgError(this)">
         ${item.score ? `<span class="badge-top-right">★ ${item.score}</span>` : ''}
         <div class="poster-bottom-info">
-          <span class="poster-hd-tag">${item.domainType || 'HD'}</span>
+          <span class="poster-hd-tag">${domainLabel}</span>
         </div>
       </div>
 
