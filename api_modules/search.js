@@ -305,6 +305,7 @@ module.exports = async (req, res) => {
           const h5Results = await h5ApiSearch(keyword);
           debugInfo.h5Count = h5Results ? h5Results.length : 0;
           if (h5Results && h5Results.length > 0) {
+            debugInfo.h5Sample = h5Results.slice(0, 3);
             rawResults = h5Results;
             debugInfo.ok = true;
             debugInfo.h5First = true;
