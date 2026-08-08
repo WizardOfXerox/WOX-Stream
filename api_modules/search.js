@@ -72,9 +72,13 @@ async function h5ApiSearch(keyword) {
   const tz = 0 - new Date().getTimezoneOffset() / 60;
 
   const hosts = ['https://h5-api.loklok.site', 'https://h5-api.hehekang.com'];
+  const cfProxy = 'https://wox-stream-proxy.wizardofxerox.workers.dev/?url=';
+
   for (const host of hosts) {
     try {
-      const res = await fetch(`${host}/cms/v2/h5/search/searchWithKeyWord`, {
+      const targetEndpoint = `${host}/cms/v2/h5/search/searchWithKeyWord`;
+      const proxyUrl = `${cfProxy}${encodeURIComponent(targetEndpoint)}`;
+      const res = await fetch(proxyUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
