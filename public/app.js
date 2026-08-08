@@ -2666,52 +2666,7 @@ async function executeKeywordSearch(query) {
   try {
     const res = await fetch(`/api/search?keyword=${encodeURIComponent(searchQuery)}&token=${encodeURIComponent(state.token || '')}&allowAdult=${String(state.settings.allowAdult || false)}`);
     const data = await res.json();
-    let rawResults = data.results || [];
-
-    // Client-side Direct Loklok Fetch Fallback: If Vercel datacenter GEO-filtered Loklok HD items, fetch directly from user's browser!
-    const hasLoklok = rawResults.some(item => !item.isNarto && !item.isViva && item.sourceName === 'Loklok HD');
-    if (!hasLoklok && searchQuery) {
-      try {
-        const clientRes = await fetch('https://ga-mobile-api.loklok.tv/cms/app/search/v1/searchWithKeyWord', {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'lang': 'en',
-            'versioncode': '33',
-            'clienttype': 'android_tem3',
-            'deviceid': '60A3305FDAAC489AAF4C7DD33B1483B4'
-          },
-          body: JSON.stringify({ searchKeyWord: searchQuery, size: 50, sort: '', searchType: '' })
-        });
-        if (clientRes.ok) {
-          const clientData = await clientRes.json();
-          if (clientData && clientData.data && Array.isArray(clientData.data.searchResults)) {
-            const qWords = searchQuery.toLowerCase().split(/\s+/).filter(w => w.length > 1);
-            const loklokItems = clientData.data.searchResults
-              .filter(item => {
-                const titleLower = String(item.name || item.title || '').toLowerCase();
-                return qWords.length === 0 || qWords.some(w => titleLower.includes(w));
-              })
-              .map(item => ({
-                id: 'wox_l_' + btoa(String(item.id)).replace(/=/g, ''),
-                category: String(item.category || item.domainType || '1'),
-                title: item.name || item.title || 'Untitled',
-                cover: (item.coverVerticalUrl || item.imageUrl || item.cover || '').replace('img.loklok.tv', 'img.chhhn.com'),
-                score: item.score || '8.5',
-                domainType: item.domainType,
-                sourceName: 'Loklok HD'
-              }));
-            
-            // Prepend direct Loklok HD items to top of results!
-            rawResults = [...loklokItems, ...rawResults];
-          }
-        }
-      } catch (clientErr) {
-        console.warn('Client-side Loklok direct search fallback failed:', clientErr.message);
-      }
-    }
-
+    const rawResults = data.results || [];
     const filtered = filterContentBySettings(rawResults);
 
     if (filtered.length === 0) {
@@ -3094,47 +3049,7 @@ window.handleSearchKeyUp = function(e) {
     try {
       const res = await fetch(`/api/search?keyword=${encodeURIComponent(query)}&fast=true&allowAdult=${String(state.settings.allowAdult || false)}&token=${encodeURIComponent(state.token)}`);
       const data = await res.json();
-      let results = data.results || [];
-
-      const hasLoklok = results.some(item => !item.isNarto && !item.isViva && item.sourceName === 'Loklok HD');
-      if (!hasLoklok && query) {
-        try {
-          const clientRes = await fetch('https://ga-mobile-api.loklok.tv/cms/app/search/v1/searchWithKeyWord', {
-            method: 'POST',
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-              'lang': 'en',
-              'versioncode': '33',
-              'clienttype': 'android_tem3',
-              'deviceid': '60A3305FDAAC489AAF4C7DD33B1483B4'
-            },
-            body: JSON.stringify({ searchKeyWord: query, size: 20, sort: '', searchType: '' })
-          });
-          if (clientRes.ok) {
-            const clientData = await clientRes.json();
-            if (clientData && clientData.data && Array.isArray(clientData.data.searchResults)) {
-              const qWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 1);
-              const loklokItems = clientData.data.searchResults
-                .filter(item => {
-                  const titleLower = String(item.name || item.title || '').toLowerCase();
-                  return qWords.length === 0 || qWords.some(w => titleLower.includes(w));
-                })
-                .map(item => ({
-                  id: 'wox_l_' + btoa(String(item.id)).replace(/=/g, ''),
-                  category: String(item.category || item.domainType || '1'),
-                  title: item.name || item.title || 'Untitled',
-                  cover: (item.coverVerticalUrl || item.imageUrl || item.cover || '').replace('img.loklok.tv', 'img.chhhn.com'),
-                  score: item.score || '8.5',
-                  domainType: item.domainType,
-                  sourceName: 'Loklok HD'
-                }));
-              results = [...loklokItems, ...results];
-            }
-          }
-        } catch (_) {}
-      }
-
+      const results = data.results || [];
       searchCache.set(cacheKey, results);
       renderSuggestions(results);
     } catch (_) {}
