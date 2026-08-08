@@ -64,12 +64,11 @@ module.exports = async (req, res) => {
         let fastResults = [];
         try {
           const [loklokRes, nartoRes] = await Promise.allSettled([
-            fetch(`${LOKLOK_API_BASE}/search/v1/searchWithKeyWord`, {
+            loklokFetch('/search/v1/searchWithKeyWord', {
               method: 'POST',
               headers: { ...headers, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ searchKeyWord: keyword.trim(), size: 10, sort: '', searchType: '' }),
-              signal: AbortSignal.timeout(4000)
-            }).then(r => r.json()),
+              body: JSON.stringify({ searchKeyWord: keyword.trim(), size: 10, sort: '', searchType: '' })
+            }),
             fetch(`https://narto-drama.com/search?q=${encodeURIComponent(keyword.trim())}&limit=10&lang=en-US`, {
               headers: getNartoHeaders(),
               signal: AbortSignal.timeout(4000)
