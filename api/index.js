@@ -1,11 +1,10 @@
 const path = require('path');
-const url = require('url');
 
 // Single Vercel Serverless Function entry point
 module.exports = async (req, res) => {
-  const host = req.headers.host || 'localhost';
-  const reqUrl = new URL(req.url || '/api/home', `http://${host}`);
-  let pathname = reqUrl.pathname.replace(/^\/api\/?/, '').split('?')[0];
+  const matchedPath = req.headers['x-matched-path'] || req.url || '/api/home';
+  const rawPath = matchedPath.split('?')[0];
+  let pathname = rawPath.replace(/^\/api\/?/, '');
 
   if (!pathname || pathname === 'index') pathname = 'home';
   if (pathname.includes('/')) pathname = pathname.split('/')[0];
@@ -15,7 +14,7 @@ module.exports = async (req, res) => {
     const handler = require(handlerPath);
     return await handler(req, res);
   } catch (err) {
-    console.error(`Dynamic API Routing Error for [${pathname}] (path: ${reqUrl.pathname}):`, err.stack || err.message);
+    console.error(`Dynamic API Routing Error for [${pathname}] (rawPath: ${rawPath}):`, err.stack || err.message);
     res.setHeader('Access-Control-Allow-Origin', '*');
     return res.status(404).json({ success: false, error: `API Route /api/${pathname} not found`, message: err.message });
   }
