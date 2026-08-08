@@ -189,16 +189,7 @@ module.exports = async (req, res) => {
         console.error('Loklok searchWithKeyWord fetch failed:', err.message);
       }
       
-      // Filter Loklok HD results so fuzzy/related items (like "Found" or "The Founder") don't pollute keyword results
-      const qWords = keyword.trim().toLowerCase().split(/\s+/).filter(w => w.length > 1);
-      const filteredRaw = qWords.length > 0
-        ? rawResults.filter(item => {
-            const titleLower = String(item.name || item.title || '').toLowerCase();
-            return qWords.some(w => titleLower.includes(w));
-          })
-        : rawResults;
-
-      let results = filteredRaw.map(item => {
+      let results = rawResults.map(item => {
         const id = item.id;
         const category = item.category || item.domainType || '1';
         const title = item.name || item.title || 'Untitled';
@@ -212,9 +203,13 @@ module.exports = async (req, res) => {
           cover: cover,
           score: item.score || null,
           domainType: item.domainType,
-          sourceName: 'Loklok HD'
+          sourceName: 'Loklok HD',
+          isLoklok: true
         };
       });
+
+      // Query words for filtering secondary sources
+      const queryWords = keyword.trim().toLowerCase().split(/\s+/).filter(w => w.length > 1);
 
       // Also search Narto Drama for short dramas matching keyword, appending after Loklok items
       try {
@@ -235,16 +230,19 @@ module.exports = async (req, res) => {
             const cleanTitle = (nItem.title || '').replace(/^\[narto\]\s*/i, '').trim();
 
             if (targetId && cleanTitle) {
-              results.push({
-                id: maskId('narto', targetId),
-                category: '1',
-                title: cleanTitle,
-                cover: cover,
-                score: '9.0',
-                domainType: 'SHORT',
-                sourceName: 'Narto Drama',
-                isNarto: true
-              });
+              const tLower = cleanTitle.toLowerCase();
+              if (queryWords.length === 0 || queryWords.some(w => tLower.includes(w))) {
+                results.push({
+                  id: maskId('narto', targetId),
+                  category: '1',
+                  title: cleanTitle,
+                  cover: cover,
+                  score: '9.0',
+                  domainType: 'SHORT',
+                  sourceName: 'Narto Drama',
+                  isNarto: true
+                });
+              }
             }
           });
         }
@@ -253,17 +251,20 @@ module.exports = async (req, res) => {
       // Append matched Viva items
       if (vivaItems.length > 0) {
         vivaItems.forEach(vItem => {
-          results.push({
-            id: vItem.id,
-            category: String(vItem.category || 1),
-            title: vItem.title,
-            cover: vItem.cover,
-            score: vItem.score || '9.0',
-            domainType: 'MOVIE',
-            sourceName: vItem.sourceName,
-            sourceKey: vItem.sourceKey,
-            isViva: true
-          });
+          const tLower = String(vItem.title || '').toLowerCase();
+          if (queryWords.length === 0 || queryWords.some(w => tLower.includes(w))) {
+            results.push({
+              id: vItem.id,
+              category: String(vItem.category || 1),
+              title: vItem.title,
+              cover: vItem.cover,
+              score: vItem.score || '9.0',
+              domainType: 'MOVIE',
+              sourceName: vItem.sourceName,
+              sourceKey: vItem.sourceKey,
+              isViva: true
+            });
+          }
         });
       }
 
@@ -272,7 +273,11 @@ module.exports = async (req, res) => {
         const animeModule = require('./anime-provider');
         const animeRes = await animeModule.searchAnime(keyword.trim());
         if (animeRes && Array.isArray(animeRes)) {
-          results.push(...animeRes);
+          const filtered = animeRes.filter(item => {
+            const tLower = String(item.title || '').toLowerCase();
+            return queryWords.length === 0 || queryWords.some(w => tLower.includes(w));
+          });
+          results.push(...filtered);
         }
       } catch (_) {}
 
@@ -281,7 +286,11 @@ module.exports = async (req, res) => {
         const dramaModule = require('./asian-drama');
         const dramaRes = await dramaModule.searchDrama(keyword.trim());
         if (dramaRes && Array.isArray(dramaRes)) {
-          results.push(...dramaRes);
+          const filtered = dramaRes.filter(item => {
+            const tLower = String(item.title || '').toLowerCase();
+            return queryWords.length === 0 || queryWords.some(w => tLower.includes(w));
+          });
+          results.push(...filtered);
         }
       } catch (_) {}
 
@@ -290,7 +299,11 @@ module.exports = async (req, res) => {
         const classicsModule = require('./classics');
         const classicsRes = await classicsModule.searchClassics(keyword.trim());
         if (classicsRes && Array.isArray(classicsRes)) {
-          results.push(...classicsRes);
+          const filtered = classicsRes.filter(item => {
+            const tLower = String(item.title || '').toLowerCase();
+            return queryWords.length === 0 || queryWords.some(w => tLower.includes(w));
+          });
+          results.push(...filtered);
         }
       } catch (_) {}
 
@@ -304,18 +317,19 @@ module.exports = async (req, res) => {
             hstreamModule.fetchHstreamCatalog(1, 'view-count', keyword.trim()),
             hmamaModule.fetchHentaiMamaCatalog(1, keyword.trim())
           ]);
-          if (hsItems && Array.isArray(hsItems)) results.push(...hsItems);
-          if (hmItems && Array.isArray(hmItems)) results.push(...hmItems);
+          if (hsItems && Array.isArray(hsItems)) {
+            results.push(...hsItems.filter(item => {
+              const tLower = String(item.title || '').toLowerCase();
+              return queryWords.length === 0 || queryWords.some(w => tLower.includes(w));
+            }));
+          }
+          if (hmItems && Array.isArray(hmItems)) {
+            results.push(...hmItems.filter(item => {
+              const tLower = String(item.title || '').toLowerCase();
+              return queryWords.length === 0 || queryWords.some(w => tLower.includes(w));
+            }));
+          }
         } catch (_) {}
-      }
-
-      // Strict Keyword Filtering: Every item must contain at least one query word in its title
-      const queryWords = keyword.trim().toLowerCase().split(/\s+/).filter(w => w.length > 1);
-      if (queryWords.length > 0) {
-        results = results.filter(item => {
-          const tLower = String(item.title || '').toLowerCase();
-          return queryWords.some(w => tLower.includes(w));
-        });
       }
 
       results = deduplicateResults(results);
