@@ -142,7 +142,17 @@ module.exports = async (req, res) => {
       const data = await searchRes.json();
 
       const rawResults = (data.data && data.data.searchResults) ? data.data.searchResults : [];
-      let results = rawResults.map(item => {
+      
+      // Filter Loklok HD results so fuzzy/related items (like "Found" or "The Founder") don't pollute keyword results
+      const qWords = keyword.trim().toLowerCase().split(/\s+/).filter(w => w.length > 1);
+      const filteredRaw = qWords.length > 0
+        ? rawResults.filter(item => {
+            const titleLower = String(item.title || item.name || '').toLowerCase();
+            return qWords.some(w => titleLower.includes(w));
+          })
+        : rawResults;
+
+      let results = filteredRaw.map(item => {
         const id = item.id;
         const category = item.category || item.domainType || '1';
         const title = item.name || item.title || 'Untitled';
