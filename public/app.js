@@ -1992,7 +1992,11 @@ window.switchNav = function(viewName, pushUrl = true) {
     loadWeeklyCalendar();
   } else if (viewName === 'search') {
     if (viewSearch) viewSearch.style.display = 'block';
-    executeKeywordSearch();
+    const inputVal = document.getElementById('search-input') ? document.getElementById('search-input').value.trim() : '';
+    const grid = document.getElementById('search-grid');
+    if (!inputVal && grid && !grid.children.length) {
+      executeKeywordSearch();
+    }
   } else if (viewName === 'watchlist') {
     if (viewWatchlist) viewWatchlist.style.display = 'block';
     loadWatchlist();
