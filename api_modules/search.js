@@ -1,4 +1,4 @@
-const { getLoklokHeaders, getNartoHeaders, setCorsHeaders, fixCoverUrl, LOKLOK_API_BASE, sanitizeToken, maskId } = require('./_utils');
+const { getLoklokHeaders, getNartoHeaders, setCorsHeaders, fixCoverUrl, LOKLOK_API_BASE, sanitizeToken, maskId, loklokFetch } = require('./_utils');
 
 function cleanTitle(t) {
   return String(t || '')
@@ -164,7 +164,7 @@ module.exports = async (req, res) => {
 
       let rawResults = [];
       try {
-        const searchRes = await fetch(`${LOKLOK_API_BASE}/search/v1/searchWithKeyWord`, {
+        const data = await loklokFetch('/search/v1/searchWithKeyWord', {
           method: 'POST',
           headers: { ...headers, 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -172,10 +172,8 @@ module.exports = async (req, res) => {
             size: 30,
             sort: '',
             searchType: ''
-          }),
-          signal: AbortSignal.timeout(5000)
+          })
         });
-        const data = await searchRes.json();
         if (data && data.data && Array.isArray(data.data.searchResults)) {
           rawResults = data.data.searchResults;
         }
