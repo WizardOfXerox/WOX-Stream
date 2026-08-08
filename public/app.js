@@ -2795,14 +2795,14 @@ function initInfiniteScrollObserver() {
   categoryInfiniteObserver.observe(sentinel);
 
   // Reliable window scroll fallback listener
-  window.onscroll = () => {
+  window.addEventListener('scroll', () => {
     if (state.activeNav !== 'category' || state.filters.loadingMore || !state.filters.hasMore) return;
     const scrollPosition = window.innerHeight + window.scrollY;
     const threshold = document.documentElement.offsetHeight - 800;
     if (scrollPosition >= threshold) {
       executeCategorySearch(false);
     }
-  };
+  });
 }
 
 

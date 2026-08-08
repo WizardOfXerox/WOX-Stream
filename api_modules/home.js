@@ -108,8 +108,16 @@ module.exports = async (req, res) => {
 
     const extraTasks = [];
 
+    // Timeout helper for extra tasks (max 3.5 seconds)
+    const withTimeout = (promise, ms = 3500) => {
+      return Promise.race([
+        promise,
+        new Promise(resolve => setTimeout(() => resolve(null), ms))
+      ]);
+    };
+
     // Task 1: Asian Dramas (Narto)
-    extraTasks.push((async () => {
+    extraTasks.push(withTimeout((async () => {
       try {
         const nartoFetch = require('./narto');
         let nartoItems = [];
@@ -135,10 +143,10 @@ module.exports = async (req, res) => {
         }
       } catch (_) {}
       return null;
-    })());
+    })()));
 
     // Task 2: Classics Archive
-    extraTasks.push((async () => {
+    extraTasks.push(withTimeout((async () => {
       try {
         const classicsModule = require('./classics');
         const classicsRes = await classicsModule.fetchClassicsShelves();
@@ -147,11 +155,11 @@ module.exports = async (req, res) => {
         }
       } catch (_) {}
       return null;
-    })());
+    })()));
 
     // Task 3: Adult Anime (if allowAdult === 'true')
     if (allowAdultParam === 'true') {
-      extraTasks.push((async () => {
+      extraTasks.push(withTimeout((async () => {
         try {
           const hstreamModule = require('./hstream');
           const hmamaModule = require('./hentaimama');
@@ -169,7 +177,7 @@ module.exports = async (req, res) => {
           }
         } catch (_) {}
         return null;
-      })());
+      })()));
     }
 
     const settled = await Promise.allSettled(extraTasks);

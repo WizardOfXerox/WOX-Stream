@@ -135,7 +135,8 @@ function fixCoverUrl(url) {
 
 async function loklokFetch(endpoint, options = {}) {
   const url = endpoint.startsWith('http') ? endpoint : `${LOKLOK_API_BASE}${endpoint}`;
-  const response = await fetch(url, options);
+  const fetchOpts = { signal: AbortSignal.timeout(6000), ...options };
+  const response = await fetch(url, fetchOpts);
   const data = await response.json();
   return data;
 }
