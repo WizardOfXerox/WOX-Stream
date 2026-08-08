@@ -119,6 +119,21 @@ module.exports = async (req, res) => {
       if (isFast) {
         let fastResults = [];
         try {
+          const h5Items = await scrapeH5GatewaySearch(keyword);
+          if (h5Items && h5Items.length > 0) {
+            h5Items.forEach(item => {
+              fastResults.push({
+                id: maskId('loklok', item.id),
+                category: String(item.category || item.domainType || '1'),
+                title: item.name || item.title || 'Untitled',
+                cover: fixCoverUrl(item.coverVerticalUrl || item.coverHorizontalUrl || item.cover || ''),
+                score: item.score || '8.5',
+                domainType: item.domainType,
+                sourceName: 'Loklok HD'
+              });
+            });
+          }
+
           const [loklokRes, nartoRes] = await Promise.allSettled([
             loklokFetch('/search/v1/searchWithKeyWord', {
               method: 'POST',
@@ -134,15 +149,17 @@ module.exports = async (req, res) => {
           if (loklokRes.status === 'fulfilled' && loklokRes.value && loklokRes.value.data && loklokRes.value.data.searchResults) {
             loklokRes.value.data.searchResults.forEach(item => {
               const itemTitle = item.name || item.title || 'Untitled';
-              fastResults.push({
-                id: maskId('loklok', item.id),
-                category: String(item.category || item.domainType || '1'),
-                title: itemTitle,
-                cover: fixCoverUrl(item.coverVerticalUrl || item.imageUrl || item.cover || ''),
-                score: item.score || null,
-                domainType: item.domainType,
-                sourceName: 'Loklok HD'
-              });
+              if (!fastResults.some(r => String(r.title).toLowerCase() === itemTitle.toLowerCase())) {
+                fastResults.push({
+                  id: maskId('loklok', item.id),
+                  category: String(item.category || item.domainType || '1'),
+                  title: itemTitle,
+                  cover: fixCoverUrl(item.coverVerticalUrl || item.imageUrl || item.cover || ''),
+                  score: item.score || null,
+                  domainType: item.domainType,
+                  sourceName: 'Loklok HD'
+                });
+              }
             });
           }
 
