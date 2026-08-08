@@ -140,54 +140,19 @@ function fixCoverUrl(url) {
   }
 }
 
-const nodeFetch = require('node-fetch');
-const { HttpsProxyAgent } = require('https-proxy-agent');
-
-const ASIAN_PROXIES = [
-  'http://43.109.48.180:9999',
-  'http://43.133.128.153:16012',
-  'http://103.82.20.76:8080',
-  'http://43.251.205.146:8080'
-];
-
 async function loklokFetch(endpoint, options = {}) {
   const url = endpoint.startsWith('http') ? endpoint : `${LOKLOK_API_BASE}${endpoint}`;
-  const isSearch = endpoint.includes('searchWithKeyWord') || endpoint.includes('search');
   const defaultHeaders = getLoklokHeaders(options.token || '');
   const headers = { ...defaultHeaders, ...(options.headers || {}) };
-
-  // 1. Direct nodeFetch attempt
+  const fetchOpts = { method: options.method || 'GET', headers, body: options.body, signal: AbortSignal.timeout(5000) };
+  
   try {
-    const res = await nodeFetch(url, {
-      method: options.method || 'GET',
-      headers,
-      body: options.body,
-      timeout: 3000
-    });
-    const data = await res.json();
-    const count = (data && data.data && Array.isArray(data.data.searchResults)) ? data.data.searchResults.length : 0;
-    if (!isSearch || count > 1) {
-      return data;
+    const response = await fetch(url, fetchOpts);
+    if (response.ok) {
+      const data = await response.json();
+      if (data) return data;
     }
   } catch (_) {}
-
-  // 2. Proxy fallback via HttpsProxyAgent
-  for (const proxyUrl of ASIAN_PROXIES) {
-    try {
-      const agent = new HttpsProxyAgent(proxyUrl);
-      const res = await nodeFetch(url, {
-        method: options.method || 'GET',
-        headers,
-        body: options.body,
-        agent,
-        timeout: 4000
-      });
-      const data = await res.json();
-      if (data && data.data && Array.isArray(data.data.searchResults) && data.data.searchResults.length > 0) {
-        return data;
-      }
-    } catch (_) {}
-  }
 
   return { code: '00000', data: { searchResults: [] } };
 }

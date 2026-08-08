@@ -708,6 +708,7 @@ module.exports = async (req, res) => {
         return res.status(200).json({ success: true, results, nextCursor });
     }
   } catch (error) {
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('API search handler error:', error.message);
+    return res.status(200).json({ success: true, results: [], error: error.message });
   }
 };
