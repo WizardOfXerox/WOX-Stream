@@ -163,6 +163,8 @@ module.exports = async (req, res) => {
 
       let rawResults = [];
       let debugInfo = { ok: false, error: null, count: 0, code: null };
+      
+      // 1. Query Loklok keyword search endpoint
       try {
         const data = await loklokFetch('/search/v1/searchWithKeyWord', {
           method: 'POST',
@@ -188,8 +190,41 @@ module.exports = async (req, res) => {
         debugInfo.error = err.message;
         console.error('Loklok searchWithKeyWord fetch failed:', err.message);
       }
-      
-      let results = rawResults.map(item => {
+
+      // 2. Also query main catalog search endpoint if keyword search returned limited items
+      try {
+        const catData = await loklokFetch('/search/v1/search?page=0', {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            size: 50,
+            params: 'MOVIE,TV,VARIETY,COMIC,DOCUMENTARY,TVSPECIAL,MINISERIES,SETI,TALK',
+            area: '',
+            category: '',
+            year: '',
+            order: 'count',
+            sort: ''
+          })
+        });
+        if (catData && catData.data && Array.isArray(catData.data.searchResults)) {
+          catData.data.searchResults.forEach(cItem => {
+            if (!rawResults.some(r => String(r.id) === String(cItem.id))) {
+              rawResults.push(cItem);
+            }
+          });
+        }
+      } catch (_) {}
+
+      // Query words for filtering Loklok items & secondary sources
+      const queryWords = keyword.trim().toLowerCase().split(/\s+/).filter(w => w.length > 1);
+
+      // Keep Loklok HD items that match keyword or came from searchWithKeyWord
+      const filteredLoklok = rawResults.filter(item => {
+        const titleLower = String(item.name || item.title || '').toLowerCase();
+        return queryWords.length === 0 || queryWords.some(w => titleLower.includes(w));
+      });
+
+      let results = filteredLoklok.map(item => {
         const id = item.id;
         const category = item.category || item.domainType || '1';
         const title = item.name || item.title || 'Untitled';
@@ -207,9 +242,6 @@ module.exports = async (req, res) => {
           isLoklok: true
         };
       });
-
-      // Query words for filtering secondary sources
-      const queryWords = keyword.trim().toLowerCase().split(/\s+/).filter(w => w.length > 1);
 
       // Also search Narto Drama for short dramas matching keyword, appending after Loklok items
       try {
