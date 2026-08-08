@@ -12,10 +12,10 @@ module.exports = async (req, res) => {
     const data = await loklokFetch(`/homePage/getHome?page=${page}`, { headers });
     
     if ((data.code !== '00000' && data.code !== '000000') || !data.data) {
-      return res.status(500).json({ success: false, error: 'Failed to fetch home feed from Loklok', raw: data });
+      console.warn('Loklok homePage/getHome endpoint error code:', data.code);
     }
 
-    const recommendItems = data.data.recommendItems || [];
+    const recommendItems = (data && data.data && data.data.recommendItems) ? data.data.recommendItems : [];
     const resultSections = [];
 
     // Categories to skip if returned as home shortcuts
@@ -53,7 +53,6 @@ module.exports = async (req, res) => {
           domainType: item.domainType
         };
       }).filter(item => {
-        // Filter out empty items and category shortcuts
         if (!item.id || !item.title) return false;
         if (skipCategories.includes(item.title.toLowerCase())) return false;
         return true;
@@ -66,6 +65,39 @@ module.exports = async (req, res) => {
           items: items
         });
       }
+    }
+
+    // Fallback: If Loklok home endpoint returned 0 Loklok items (e.g. cloud hosting IP restrictions), populate from Loklok catalog search
+    if (resultSections.length === 0) {
+      try {
+        const fallbackRes = await fetch(`${LOKLOK_API_BASE}/search/v1/search`, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ size: 24, params: 'MOVIE,TV,VARIETY,COMIC,DOCUMENTARY', area: '', category: '', year: '', order: 'count', sort: '' })
+        });
+        const fallbackData = await fallbackRes.json();
+        if (fallbackData.data && Array.isArray(fallbackData.data.searchResults) && fallbackData.data.searchResults.length > 0) {
+          const loklokItems = fallbackData.data.searchResults.map(item => ({
+            id: maskId('loklok', item.id),
+            category: String(item.category || item.domainType || '1'),
+            title: item.name || item.title || 'Untitled',
+            cover: fixCoverUrl(item.coverVerticalUrl || item.imageUrl || item.cover || ''),
+            score: item.score || null,
+            domainType: item.domainType
+          }));
+
+          resultSections.push({
+            title: '🔥 TRENDING MOVIES & SHOWS',
+            type: 'SINGLE_ALBUM',
+            items: loklokItems.slice(0, 12)
+          });
+          resultSections.push({
+            title: '✨ POPULAR RELEASES',
+            type: 'SINGLE_ALBUM',
+            items: loklokItems.slice(12, 24)
+          });
+        }
+      } catch (_) {}
     }
 
     // Concurrently fetch multi-source shelves (Asian Short Dramas, Classics, Adult Anime)
