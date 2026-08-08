@@ -304,7 +304,61 @@ async function performSearch(query) {
       }
     }
   } catch (_) {
-    // Falls back seamlessly to server API route
+    // Falls back seamlessly to H5 gateway / server API route
+  }
+
+  // Client-Side H5 Web Gateway SSR Scraper Fallback (Unrestricted Global Access)
+  if (clientLoklokResults.length === 0 && query.trim()) {
+    try {
+      const h5Gateways = [
+        `https://h5.decryptplan.com/search?keyword=${encodeURIComponent(query.trim())}`,
+        `https://h5.netpop.app/search?keyword=${encodeURIComponent(query.trim())}`,
+        `https://h5.loklok.site/search?keyword=${encodeURIComponent(query.trim())}`
+      ];
+      for (const gateUrl of h5Gateways) {
+        const h5Res = await fetch(gateUrl);
+        if (!h5Res.ok) continue;
+        const html = await h5Res.text();
+        const scripts = Array.from(html.matchAll(/<script[^>]*>(.*?)<\/script>/gs)).map(m => m[1]);
+        const dataScript = scripts.find(s => s.includes('Reactive'));
+        if (dataScript) {
+          const arr = (new Function('return ' + dataScript))();
+          if (Array.isArray(arr)) {
+            const h5Items = [];
+            for (let i = 0; i < arr.length; i++) {
+              const obj = arr[i];
+              if (obj && typeof obj === 'object' && !Array.isArray(obj) && typeof obj.name === 'number' && (typeof obj.coverVerticalUrl === 'number' || typeof obj.coverHorizontalUrl === 'number') && typeof obj.id === 'number') {
+                const name = arr[obj.name];
+                const cover = (typeof obj.coverVerticalUrl === 'number' ? arr[obj.coverVerticalUrl] : null) || (typeof obj.coverHorizontalUrl === 'number' ? arr[obj.coverHorizontalUrl] : null) || '';
+                const id = arr[obj.id];
+                const domainType = (typeof obj.domainType === 'number' ? arr[obj.domainType] : null) || obj.domainType;
+                const score = (typeof obj.score === 'number' ? arr[obj.score] : null) || obj.score || '8.5';
+                if (typeof name === 'string' && id) {
+                  h5Items.push({
+                    id: `wox_l_${id}`,
+                    rawId: String(id),
+                    title: name,
+                    cover: typeof fixCoverUrl === 'function' ? fixCoverUrl(cover) : cover,
+                    category: domainType === 0 ? 1 : 0,
+                    domainType: domainType === 0 ? 'MOVIE' : 'TV',
+                    score: String(score),
+                    sourceName: 'Loklok HD'
+                  });
+                }
+              }
+            }
+            if (h5Items.length > 0) {
+              const qWords = query.trim().toLowerCase().split(/\s+/).filter(w => w.length > 1);
+              clientLoklokResults = h5Items.filter(item => {
+                const titleLower = String(item.title || '').toLowerCase();
+                return qWords.length === 0 || qWords.some(w => titleLower.includes(w));
+              });
+              if (clientLoklokResults.length > 0) break;
+            }
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   try {
