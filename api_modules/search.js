@@ -188,8 +188,30 @@ module.exports = async (req, res) => {
         }
       } catch (err) {
         debugInfo.error = err.message;
-        console.error('Loklok searchWithKeyWord fetch failed:', err.message);
       }
+
+      // 1b. Upstream Render Singapore Bridge query fallback for Vercel
+      if ((!rawResults || rawResults.length === 0) && !process.env.IS_RENDER) {
+        try {
+          const upstreamRes = await fetch(`https://wox-stream.onrender.com/api/search?keyword=${encodeURIComponent(keyword.trim())}`, { signal: AbortSignal.timeout(3000) });
+          if (upstreamRes.ok) {
+            const upstreamData = await upstreamRes.json();
+            if (upstreamData && Array.isArray(upstreamData.results) && upstreamData.results.length > 0) {
+              const loklokItems = upstreamData.results.filter(r => r.sourceName === 'Loklok HD' || !r.sourceName);
+              if (loklokItems.length > 0) {
+                rawResults = loklokItems.map(item => ({
+                  id: item.rawId || String(item.id).replace('wox_l_', ''),
+                  name: item.title,
+                  coverVerticalUrl: item.cover,
+                  domainType: item.category === 1 ? 0 : 1,
+                  score: item.score
+                }));
+              }
+            }
+          }
+        } catch (_) {}
+      }  console.error('Loklok searchWithKeyWord fetch failed:', debugInfo.error);
+      
 
       // 2. Also query main catalog search endpoint if keyword search returned limited items
       try {
