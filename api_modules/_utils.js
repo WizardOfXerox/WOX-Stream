@@ -142,9 +142,9 @@ function fixCoverUrl(url) {
 const { ProxyAgent } = require('undici');
 
 const phProxyList = [
+  'http://113.160.132.26:8080',
   'http://lvobnman:orhvw5gw4blz@64.137.96.74:6641',
   'http://lvobnman:orhvw5gw4blz@142.111.67.146:5611',
-  'http://lvobnman:orhvw5gw4blz@31.59.20.176:6754',
   'http://43.133.128.153:16012'
 ];
 
