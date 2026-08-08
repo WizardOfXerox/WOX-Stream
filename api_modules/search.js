@@ -111,7 +111,9 @@ async function h5ApiSearch(keyword) {
           }));
         }
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error('h5ApiSearch error with', host, ':', err.message);
+    }
   }
   return [];
 }
@@ -301,13 +303,16 @@ module.exports = async (req, res) => {
       if (keyword && keyword.trim()) {
         try {
           const h5Results = await h5ApiSearch(keyword);
+          debugInfo.h5Count = h5Results ? h5Results.length : 0;
           if (h5Results && h5Results.length > 0) {
             rawResults = h5Results;
             debugInfo.ok = true;
             debugInfo.h5First = true;
             debugInfo.count = rawResults.length;
           }
-        } catch (_) {}
+        } catch (h5Err) {
+          debugInfo.h5Error = h5Err.message;
+        }
       }
 
       // 2. Query mobile API search endpoint as secondary source
