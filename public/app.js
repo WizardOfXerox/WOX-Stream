@@ -772,17 +772,14 @@ window.playEpisode = function(mediaArg, epArg) {
       const mirrorDropdown = document.getElementById('player-mirror-dropdown');
       if (mirrorDropdown) {
         const mirrors = media.mirrors || [
-          { id: media.id, sourceKey: 'loklok', sourceName: 'Loklok HD' },
-          { id: media.id, sourceKey: 'vivaone', sourceName: 'Viva One' },
-          { id: media.id, sourceKey: 'vivamax', sourceName: 'VivaMax' },
-          { id: media.id, sourceKey: 'vivamb', sourceName: 'Viva MovieBox' }
+          { id: media.id, sourceKey: 'loklok', sourceName: 'Server Alpha (HD)' }
         ];
 
         const activeKey = media.sourceKey || (media.isNarto ? 'narto' : (media.isViva ? 'viva' : 'loklok'));
         const label = document.getElementById('current-mirror-label');
         if (label) {
           const activeMirror = mirrors.find(m => m.sourceKey === activeKey) || mirrors[0];
-          label.innerText = activeMirror ? activeMirror.sourceName : 'Loklok HD';
+          label.innerText = activeMirror ? activeMirror.sourceName : 'Server Alpha (HD)';
         }
 
         mirrorDropdown.innerHTML = mirrors.map(m => `
@@ -968,7 +965,7 @@ window.openDetailModal = async function(id, category = 1) {
     let mirrorsHtml = '';
     const availableMirrors = (detail.mirrors && detail.mirrors.length > 0) 
       ? detail.mirrors 
-      : [{ id: detail.id, sourceKey: 'loklok', sourceName: 'Loklok HD', isDefault: true }];
+      : [{ id: detail.id, sourceKey: 'loklok', sourceName: 'Server Alpha (HD)', isDefault: true }];
 
     // ONLY render the mirror selector bar if MULTIPLE REAL MIRRORS exist for this title!
     if (availableMirrors.length > 1) {

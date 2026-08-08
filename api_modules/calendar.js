@@ -34,13 +34,43 @@ module.exports = async (req, res) => {
                 score: item.score || '8.5',
                 updateDay: item.updateDay || (Math.floor(Math.random() * 7) + 1),
                 airTime: item.releaseTime || '20:00',
-                updateInfo: section.homeSectionName || 'Loklok Premiere'
+                updateInfo: section.homeSectionName || 'New Release'
               });
             }
           });
         });
       }
     });
+
+    // Fallback if homePage returned 0 items on Vercel cloud IP
+    if (rawList.length === 0) {
+      try {
+        const searchData = await loklokFetch('/search/v1/search', {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ size: 35, params: 'MOVIE,TV,COMIC,MINISERIES', area: '', category: '', year: '', order: 'count', sort: '' })
+        });
+        const searchResults = (searchData && searchData.data && Array.isArray(searchData.data.searchResults)) ? searchData.data.searchResults : [];
+
+        searchResults.forEach(item => {
+          const rawTitle = item.title || item.name || item.videoName || '';
+          if (item.id && rawTitle) {
+            rawList.push({
+              id: String(item.id),
+              category: String(item.category || item.domainType || '1'),
+              title: rawTitle,
+              cover: fixCoverUrl(item.coverVerticalUrl || item.imageUrl || item.cover || ''),
+              score: item.score || '8.5',
+              updateDay: (Math.floor(Math.random() * 7) + 1),
+              airTime: '20:00',
+              updateInfo: 'Weekly Release'
+            });
+          }
+        });
+      } catch (err) {
+        console.error('Calendar fallback error:', err.message);
+      }
+    }
 
     // Remove duplicates
     const uniqueMap = new Map();
@@ -70,7 +100,7 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      source: 'loklok_live_api',
+      source: 'wox_live_api',
       totalCount: allItems.length,
       weeklySchedule: days
     });

@@ -88,18 +88,18 @@ module.exports = async (req, res) => {
           }));
 
           resultSections.unshift({
-            title: '🔥 TRENDING LOKLOK MOVIES & SHOWS',
+            title: '🔥 TRENDING MOVIES & SHOWS',
             type: 'SINGLE_ALBUM',
             items: loklokItems.slice(0, 12)
           });
           resultSections.unshift({
-            title: '✨ POPULAR LOKLOK RELEASES',
+            title: '✨ POPULAR RELEASES',
             type: 'SINGLE_ALBUM',
             items: loklokItems.slice(12, 24)
           });
         }
       } catch (err) {
-        console.error('Loklok search fallback error on home:', err.message);
+        console.error('Search fallback error on home:', err.message);
       }
     }
 
@@ -128,7 +128,7 @@ module.exports = async (req, res) => {
             cover: nItem.cover,
             score: '9.0',
             domainType: 'SHORT',
-            sourceName: 'Narto Drama',
+            sourceName: 'WOX Stream',
             isNarto: true
           }));
           return { title: '🔥 POPULAR ASIAN SHORT DRAMAS', type: 'NARTO_SECTION', items: formatted };

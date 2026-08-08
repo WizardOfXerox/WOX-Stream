@@ -139,7 +139,7 @@ module.exports = async (req, res) => {
 
     const normTitle = (drama.name || drama.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     const mirrors = [
-      { id: maskId('loklok', drama.id), sourceKey: 'loklok', sourceName: 'Loklok HD', isDefault: true }
+      { id: maskId('loklok', drama.id), sourceKey: 'loklok', sourceName: 'Server Alpha (HD)', isDefault: true }
     ];
 
     try {
