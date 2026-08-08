@@ -40,6 +40,61 @@ function deduplicateResults(items) {
   return Array.from(map.values());
 }
 
+async function scrapeH5GatewaySearch(keyword) {
+  if (!keyword || !keyword.trim()) return [];
+  const h5Gateways = [
+    `https://h5.decryptplan.com/search?keyword=${encodeURIComponent(keyword.trim())}`,
+    `https://h5.netpop.app/search?keyword=${encodeURIComponent(keyword.trim())}`,
+    `https://h5.loklok.site/search?keyword=${encodeURIComponent(keyword.trim())}`
+  ];
+
+  for (const gateUrl of h5Gateways) {
+    try {
+      const res = await fetch(gateUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9'
+        },
+        signal: AbortSignal.timeout(15000)
+      });
+      if (!res.ok) continue;
+      const html = await res.text();
+      const scripts = Array.from(html.matchAll(/<script[^>]*>(.*?)<\/script>/gs)).map(m => m[1]);
+      const dataScript = scripts.find(s => s.includes('Reactive'));
+      if (dataScript) {
+        const sandbox = { result: null };
+        vm.runInNewContext('result = ' + dataScript, sandbox);
+        const arr = sandbox.result;
+        if (Array.isArray(arr)) {
+          const h5Items = [];
+          for (let i = 0; i < arr.length; i++) {
+            const obj = arr[i];
+            if (obj && typeof obj === 'object' && !Array.isArray(obj) && typeof obj.name === 'number' && (typeof obj.coverVerticalUrl === 'number' || typeof obj.coverHorizontalUrl === 'number') && typeof obj.id === 'number') {
+              const name = arr[obj.name];
+              const cover = (typeof obj.coverVerticalUrl === 'number' ? arr[obj.coverVerticalUrl] : null) || (typeof obj.coverHorizontalUrl === 'number' ? arr[obj.coverHorizontalUrl] : null) || '';
+              const id = arr[obj.id];
+              const domainType = (typeof obj.domainType === 'number' ? arr[obj.domainType] : null) || obj.domainType;
+              const score = (typeof obj.score === 'number' ? arr[obj.score] : null) || obj.score || '8.5';
+              if (typeof name === 'string' && id) {
+                h5Items.push({
+                  id: String(id),
+                  name: name,
+                  coverVerticalUrl: cover,
+                  domainType: (domainType === 1 || domainType === 'TV') ? 1 : 0,
+                  score: String(score)
+                });
+              }
+            }
+          }
+          if (h5Items.length > 0) return h5Items;
+        }
+      }
+    } catch (_) {}
+  }
+  return [];
+}
+
 module.exports = async (req, res) => {
   setCorsHeaders(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -191,159 +246,26 @@ module.exports = async (req, res) => {
         debugInfo.error = err.message;
       }
 
-      // 1b. H5 Gateway SSR Scraper fallback for Vercel / Cloud Datacenters (Unrestricted Global Access)
-      if (!rawResults || rawResults.length === 0) {
-        try {
-          const h5Gateways = [
-            `https://h5.decryptplan.com/search?keyword=${encodeURIComponent(keyword.trim())}`,
-            `https://h5.netpop.app/search?keyword=${encodeURIComponent(keyword.trim())}`,
-            `https://h5.loklok.site/search?keyword=${encodeURIComponent(keyword.trim())}`
-          ];
-          for (const gateUrl of h5Gateways) {
-            const h5Res = await fetch(gateUrl, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'X-Forwarded-For': '171.96.12.34',
-                'X-Real-IP': '171.96.12.34',
-                'clientip': '171.96.12.34',
-                'True-Client-IP': '171.96.12.34',
-                'CF-Connecting-IP': '171.96.12.34'
-              },
-              signal: AbortSignal.timeout(15000)
-            });
-            if (!h5Res.ok) continue;
-            const html = await h5Res.text();
-            const scripts = Array.from(html.matchAll(/<script[^>]*>(.*?)<\/script>/gs)).map(m => m[1]);
-            const dataScript = scripts.find(s => s.includes('Reactive'));
-            if (dataScript) {
-              const sandbox = { result: null };
-              vm.runInNewContext('result = ' + dataScript, sandbox);
-              const arr = sandbox.result;
-              if (Array.isArray(arr)) {
-                const h5Items = [];
-                for (let i = 0; i < arr.length; i++) {
-                  const obj = arr[i];
-                  if (obj && typeof obj === 'object' && !Array.isArray(obj) && typeof obj.name === 'number' && typeof obj.id === 'number') {
-                    const name = arr[obj.name];
-                    const cover = (typeof obj.coverVerticalUrl === 'number' ? arr[obj.coverVerticalUrl] : null) || (typeof obj.coverHorizontalUrl === 'number' ? arr[obj.coverHorizontalUrl] : null) || '';
-                    const id = arr[obj.id];
-                    const domainType = (typeof obj.domainType === 'number' ? arr[obj.domainType] : null) || obj.domainType;
-                    const score = (typeof obj.score === 'number' ? arr[obj.score] : null) || obj.score || '8.5';
-                    if (typeof name === 'string' && id) {
-                      h5Items.push({
-                        id: String(id),
-                        name: name,
-                        coverVerticalUrl: cover,
-                        domainType: (domainType === 1 || domainType === 'TV') ? 1 : 0,
-                        score: String(score)
-                      });
-                    }
-                  }
-                }
-                if (h5Items.length > 0) {
-                  rawResults = h5Items;
-                  debugInfo.ok = true;
-                  debugInfo.count = rawResults.length;
-                  break;
-                }
-              }
-            }
-          }
-        } catch (_) {}
-      }
-      
-
-      // 2. Also query main catalog search endpoint if keyword search returned limited items
-      try {
-        const catData = await loklokFetch('/search/v1/search?page=0', {
-          method: 'POST',
-          headers: { ...headers, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            size: 50,
-            params: 'MOVIE,TV,VARIETY,COMIC,DOCUMENTARY,TVSPECIAL,MINISERIES,SETI,TALK',
-            area: '',
-            category: '',
-            year: '',
-            order: 'count',
-            sort: ''
-          })
-        });
-        if (catData && catData.data && Array.isArray(catData.data.searchResults)) {
-          catData.data.searchResults.forEach(cItem => {
-            if (!rawResults.some(r => String(r.id) === String(cItem.id))) {
-              rawResults.push(cItem);
-            }
-          });
-        }
-      } catch (_) {}
-
       // Query words for filtering Loklok items & secondary sources
       const queryWords = keyword.trim().toLowerCase().split(/\s+/).filter(w => w.length > 1);
 
-      // Keep Loklok HD items that match keyword or came from searchWithKeyWord
       let filteredLoklok = rawResults.filter(item => {
         const titleLower = String(item.name || item.title || '').toLowerCase();
         return queryWords.length === 0 || queryWords.some(w => titleLower.includes(w));
       });
 
-      // If no items match the keyword, trigger H5 Gateway SSR Scraper fallback
+      // If mobile search returned no items matching keyword, use H5 Gateway SSR Scraper fallback
       if (filteredLoklok.length === 0 && keyword.trim()) {
-        try {
-          const h5Gateways = [
-            `https://h5.decryptplan.com/search?keyword=${encodeURIComponent(keyword.trim())}`,
-            `https://h5.netpop.app/search?keyword=${encodeURIComponent(keyword.trim())}`,
-            `https://h5.loklok.site/search?keyword=${encodeURIComponent(keyword.trim())}`
-          ];
-          for (const gateUrl of h5Gateways) {
-            const h5Res = await fetch(gateUrl, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9'
-              },
-              signal: AbortSignal.timeout(15000)
-            });
-            if (!h5Res.ok) continue;
-            const html = await h5Res.text();
-            const scripts = Array.from(html.matchAll(/<script[^>]*>(.*?)<\/script>/gs)).map(m => m[1]);
-            const dataScript = scripts.find(s => s.includes('Reactive'));
-            if (dataScript) {
-              const sandbox = { result: null };
-              vm.runInNewContext('result = ' + dataScript, sandbox);
-              const arr = sandbox.result;
-              if (Array.isArray(arr)) {
-                const h5Items = [];
-                for (let i = 0; i < arr.length; i++) {
-                  const obj = arr[i];
-                  if (obj && typeof obj === 'object' && !Array.isArray(obj) && typeof obj.name === 'number' && typeof obj.id === 'number') {
-                    const name = arr[obj.name];
-                    const cover = (typeof obj.coverVerticalUrl === 'number' ? arr[obj.coverVerticalUrl] : null) || (typeof obj.coverHorizontalUrl === 'number' ? arr[obj.coverHorizontalUrl] : null) || '';
-                    const id = arr[obj.id];
-                    const domainType = (typeof obj.domainType === 'number' ? arr[obj.domainType] : null) || obj.domainType;
-                    const score = (typeof obj.score === 'number' ? arr[obj.score] : null) || obj.score || '8.5';
-                    if (typeof name === 'string' && id) {
-                      h5Items.push({
-                        id: String(id),
-                        name: name,
-                        coverVerticalUrl: cover,
-                        domainType: (domainType === 1 || domainType === 'TV') ? 1 : 0,
-                        score: String(score)
-                      });
-                    }
-                  }
-                }
-                if (h5Items.length > 0) {
-                  filteredLoklok = h5Items.filter(item => {
-                    const titleLower = String(item.name || item.title || '').toLowerCase();
-                    return queryWords.length === 0 || queryWords.some(w => titleLower.includes(w));
-                  });
-                  if (filteredLoklok.length > 0) break;
-                }
-              }
-            }
-          }
-        } catch (_) {}
+        const h5Results = await scrapeH5GatewaySearch(keyword);
+        if (h5Results.length > 0) {
+          filteredLoklok = h5Results.filter(item => {
+            const titleLower = String(item.name || item.title || '').toLowerCase();
+            return queryWords.length === 0 || queryWords.some(w => titleLower.includes(w));
+          });
+          debugInfo.ok = true;
+          debugInfo.h5Fallback = true;
+          debugInfo.count = filteredLoklok.length;
+        }
       }
 
       let results = filteredLoklok.map(item => {
