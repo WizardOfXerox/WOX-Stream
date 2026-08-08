@@ -165,8 +165,7 @@ async function loklokFetch(endpoint, options = {}) {
     });
     if (res.ok) {
       const data = await res.json();
-      const count = (data && data.data && Array.isArray(data.data.searchResults)) ? data.data.searchResults.length : 0;
-      if (!isSearch || count > 1) return data;
+      if (data && data.code === '00000') return data;
     }
   } catch (_) {}
 
