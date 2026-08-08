@@ -182,7 +182,7 @@ module.exports = async (req, res) => {
       const qWords = keyword.trim().toLowerCase().split(/\s+/).filter(w => w.length > 1);
       const filteredRaw = qWords.length > 0
         ? rawResults.filter(item => {
-            const titleLower = String(item.title || item.name || '').toLowerCase();
+            const titleLower = String(item.name || item.title || '').toLowerCase();
             return qWords.some(w => titleLower.includes(w));
           })
         : rawResults;
