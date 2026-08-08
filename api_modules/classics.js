@@ -70,7 +70,15 @@ async function searchClassics(query) {
         const data = await response.json();
         const docs = data.response?.docs || [];
         
-        return docs.map(doc => ({
+        const qWords = query.trim().toLowerCase().split(/\s+/).filter(w => w.length > 1);
+        const filteredDocs = qWords.length > 0
+            ? docs.filter(doc => {
+                const tLower = String(doc.title || '').toLowerCase();
+                return qWords.some(w => tLower.includes(w));
+              })
+            : docs;
+
+        return filteredDocs.map(doc => ({
             id: maskId('classics', doc.identifier),
             category: '0',
             title: doc.title || 'Unknown Title',
