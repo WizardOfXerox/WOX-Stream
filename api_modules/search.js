@@ -1,3 +1,4 @@
+const vm = require('vm');
 const { getLoklokHeaders, getNartoHeaders, setCorsHeaders, fixCoverUrl, LOKLOK_API_BASE, sanitizeToken, maskId, loklokFetch } = require('./_utils');
 
 function cleanTitle(t) {
@@ -211,32 +212,36 @@ module.exports = async (req, res) => {
             const scripts = Array.from(html.matchAll(/<script[^>]*>(.*?)<\/script>/gs)).map(m => m[1]);
             const dataScript = scripts.find(s => s.includes('snssb') || s.includes('coverVerticalUrl') || s.includes('domainType'));
             if (dataScript) {
-              const arr = eval(dataScript);
-              const h5Items = [];
-              for (let i = 0; i < arr.length; i++) {
-                const obj = arr[i];
-                if (obj && typeof obj === 'object' && !Array.isArray(obj) && obj.name && obj.coverVerticalUrl && obj.id) {
-                  const name = arr[obj.name];
-                  const cover = arr[obj.coverVerticalUrl] || arr[obj.coverHorizontalUrl];
-                  const id = arr[obj.id];
-                  const domainType = arr[obj.domainType] || obj.domainType;
-                  const score = arr[obj.score] || obj.score || '8.5';
-                  if (typeof name === 'string' && typeof cover === 'string' && id) {
-                    h5Items.push({
-                      id: String(id),
-                      name: name,
-                      coverVerticalUrl: cover,
-                      domainType: (domainType === 1 || domainType === 'TV') ? 1 : 0,
-                      score: String(score)
-                    });
+              const sandbox = { result: null };
+              vm.runInNewContext('result = ' + dataScript, sandbox);
+              const arr = sandbox.result;
+              if (Array.isArray(arr)) {
+                const h5Items = [];
+                for (let i = 0; i < arr.length; i++) {
+                  const obj = arr[i];
+                  if (obj && typeof obj === 'object' && !Array.isArray(obj) && typeof obj.name === 'number' && typeof obj.coverVerticalUrl === 'number' && typeof obj.id === 'number') {
+                    const name = arr[obj.name];
+                    const cover = arr[obj.coverVerticalUrl] || arr[obj.coverHorizontalUrl];
+                    const id = arr[obj.id];
+                    const domainType = arr[obj.domainType] || obj.domainType;
+                    const score = arr[obj.score] || obj.score || '8.5';
+                    if (typeof name === 'string' && typeof cover === 'string' && id) {
+                      h5Items.push({
+                        id: String(id),
+                        name: name,
+                        coverVerticalUrl: cover,
+                        domainType: (domainType === 1 || domainType === 'TV') ? 1 : 0,
+                        score: String(score)
+                      });
+                    }
                   }
                 }
-              }
-              if (h5Items.length > 0) {
-                rawResults = h5Items;
-                debugInfo.ok = true;
-                debugInfo.count = rawResults.length;
-                break;
+                if (h5Items.length > 0) {
+                  rawResults = h5Items;
+                  debugInfo.ok = true;
+                  debugInfo.count = rawResults.length;
+                  break;
+                }
               }
             }
           }
