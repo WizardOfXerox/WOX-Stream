@@ -147,14 +147,14 @@ const fetchDramaShelves = async () => {
 const searchDrama = async (query) => {
   try {
     const response = await fetch(`${BASE_URL}/DramaList/Search?q=${encodeURIComponent(query)}&type=0`, {
-      headers: HEADERS
+      headers: HEADERS,
+      signal: AbortSignal.timeout(3000)
     });
     if (!response.ok) return [];
     
     const data = await response.json();
     return (Array.isArray(data) ? data : []).map(mapDramaItem);
-  } catch (error) {
-    console.error('Search failed:', error);
+  } catch (_) {
     return [];
   }
 };

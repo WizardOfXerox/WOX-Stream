@@ -139,72 +139,28 @@ function fixCoverUrl(url) {
   }
 }
 
-const nodeFetch = require('node-fetch');
-const { HttpsProxyAgent } = require('https-proxy-agent');
-
-let cachedPhProxies = [
-  'http://43.133.128.153:16012',
-  'http://43.109.48.180:9999',
-  'http://103.82.20.76:8080'
-];
-
-async function refreshAsianProxyPool() {
-  try {
-    const res = await nodeFetch('https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=2000&country=PH,SG,ID,TH,MY', { timeout: 2500 });
-    const text = await res.text();
-    const list = text.trim().split('\r\n').filter(p => p.includes(':'));
-    if (list.length > 0) {
-      cachedPhProxies = [...list.map(p => 'http://' + p), ...cachedPhProxies];
-    }
-  } catch (_) {}
-}
-
 async function loklokFetch(endpoint, options = {}) {
   const targetBase = 'https://ga-mobile-api.loklok.tv/cms/app';
   const url = endpoint.startsWith('http') ? endpoint : `${targetBase}${endpoint}`;
-  const isSearch = endpoint.includes('searchWithKeyWord') || endpoint.includes('search');
   const defaultHeaders = getLoklokHeaders(options.token || '');
   const headers = { ...defaultHeaders, ...(options.headers || {}) };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
 
-  // 1. Direct fetch attempt with 1.2s timeout
   try {
-    const res = await nodeFetch(url, {
+    const response = await fetch(url, {
       method: options.method || 'GET',
       headers,
       body: options.body,
-      timeout: 1200
+      signal: controller.signal
     });
-    if (res.ok) {
-      const data = await res.json();
-      const count = (data && data.data && Array.isArray(data.data.searchResults)) ? data.data.searchResults.length : 0;
-      if (!isSearch || count > 1) {
-        return data;
-      }
+    clearTimeout(timeout);
+    if (response.ok) {
+      const data = await response.json();
+      if (data) return data;
     }
-  } catch (_) {}
-
-  // 2. Dynamic proxy pool attempt
-  if (cachedPhProxies.length < 3) {
-    await refreshAsianProxyPool();
-  }
-
-  for (const proxyUrl of cachedPhProxies) {
-    try {
-      const agent = new HttpsProxyAgent(proxyUrl);
-      const res = await nodeFetch(url, {
-        method: options.method || 'GET',
-        headers,
-        body: options.body,
-        agent,
-        timeout: 2000
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.data && Array.isArray(data.data.searchResults) && data.data.searchResults.length > 0) {
-          return data;
-        }
-      }
-    } catch (_) {}
+  } catch (_) {
+    clearTimeout(timeout);
   }
 
   return { code: '00000', data: { searchResults: [] } };
