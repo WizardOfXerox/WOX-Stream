@@ -1992,6 +1992,7 @@ window.switchNav = function(viewName, pushUrl = true) {
     loadWeeklyCalendar();
   } else if (viewName === 'search') {
     if (viewSearch) viewSearch.style.display = 'block';
+    executeKeywordSearch();
   } else if (viewName === 'watchlist') {
     if (viewWatchlist) viewWatchlist.style.display = 'block';
     loadWatchlist();
@@ -2245,7 +2246,7 @@ window.showSearchHistory = function() {
       <span onclick="localStorage.removeItem('loklok_search_history');document.getElementById('search-suggestions-dropdown').style.display='none';" style="cursor:pointer;color:#f87171;font-size:0.7rem;">Clear</span>
     </div>
     ${history.map(h => `
-      <div class="search-suggestion-item" onclick="document.getElementById('search-input').value='${escapeHtml(h)}';switchNav('category');executeCategorySearch(true,'${escapeHtml(h)}');document.getElementById('search-suggestions-dropdown').style.display='none';saveSearchHistory('${escapeHtml(h)}');" style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 1rem;cursor:pointer;" onmouseover="this.style.background='rgba(147,51,234,0.15)'" onmouseout="this.style.background='transparent'">
+      <div class="search-suggestion-item" onclick="document.getElementById('search-input').value='${escapeHtml(h)}';switchNav('search');executeKeywordSearch('${escapeHtml(h)}');document.getElementById('search-suggestions-dropdown').style.display='none';saveSearchHistory('${escapeHtml(h)}');" style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 1rem;cursor:pointer;" onmouseover="this.style.background='rgba(147,51,234,0.15)'" onmouseout="this.style.background='transparent'">
         <span style="color:var(--text-muted);font-size:1rem;">🔍</span>
         <span style="color:#fff;font-size:0.9rem;">${escapeHtml(h)}</span>
       </div>
@@ -2650,7 +2651,37 @@ state.filters.loadingMore = false;
 state.filters.hasMore = true;
 state.filters.seenIds = new Set();
 
-async function executeCategorySearch(isReset = true, searchQuery = null) {
+async function executeKeywordSearch(query) {
+  const grid = document.getElementById('search-grid');
+  const titleEl = document.getElementById('search-title');
+  if (!grid) return;
+
+  const searchQuery = query || (document.getElementById('search-input') ? document.getElementById('search-input').value.trim() : '');
+  if (titleEl) {
+    titleEl.innerText = searchQuery ? `Search Results for "${searchQuery}"` : 'Search Results';
+  }
+
+  grid.innerHTML = '<div class="spinner"></div>';
+
+  try {
+    const res = await fetch(`/api/search?keyword=${encodeURIComponent(searchQuery)}&token=${encodeURIComponent(state.token || '')}&allowAdult=${String(state.settings.allowAdult || false)}`);
+    const data = await res.json();
+    const rawResults = data.results || [];
+    const filtered = filterContentBySettings(rawResults);
+
+    if (filtered.length === 0) {
+      grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;text-align:center;padding:3rem;">No media titles found for this search term.</p>';
+    } else {
+      grid.innerHTML = filtered.map(item => renderLoklokCard(item)).join('');
+    }
+  } catch (err) {
+    grid.innerHTML = `<p style="color:var(--text-muted);grid-column:1/-1;text-align:center;padding:3rem;">Error loading search results: ${err.message}</p>`;
+  }
+}
+
+window.executeKeywordSearch = executeKeywordSearch;
+
+async function executeCategorySearch(isReset = true) {
   const grid = document.getElementById('category-grid');
   const spEl = document.getElementById('infinite-scroll-spinner');
   const txtEl = document.getElementById('infinite-scroll-text');
@@ -2672,25 +2703,11 @@ async function executeCategorySearch(isReset = true, searchQuery = null) {
     if (txtEl) txtEl.innerText = 'Loading more titles...';
   }
 
-  const searchInput = document.getElementById('search-input');
-  const activeQuery = searchQuery !== null ? searchQuery : (searchInput ? searchInput.value.trim() : '');
-
-  // Reset source filter pill if keyword search query is submitted directly
-  if (searchQuery !== null && searchQuery.trim() !== '') {
-    state.filters.sourceFilter = '';
-    const pillsGroup = document.getElementById('pills-source');
-    if (pillsGroup) {
-      pillsGroup.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
-      const allPill = pillsGroup.querySelector('.filter-pill[data-val=""]');
-      if (allPill) allPill.classList.add('active');
-    }
-  }
-
   try {
     const queryParams = new URLSearchParams({
-      params: activeQuery ? '' : (state.filters.params || 'MOVIE,TV,VARIETY,COMIC,DOCUMENTARY,MINISERIES'),
-      area: activeQuery ? '' : (state.filters.area || ''),
-      category: activeQuery ? '' : (state.filters.category || ''),
+      params: state.filters.params || 'MOVIE,TV,VARIETY,COMIC,DOCUMENTARY,MINISERIES',
+      area: state.filters.area || '',
+      category: state.filters.category || '',
       order: state.filters.order || 'count',
       sort: state.filters.cursor || '',
       source: state.filters.sourceFilter || '',
@@ -2698,11 +2715,6 @@ async function executeCategorySearch(isReset = true, searchQuery = null) {
       token: state.token || '',
       allowAdult: String(state.settings.allowAdult || false)
     });
-
-    if (activeQuery) {
-      queryParams.set('q', activeQuery);
-      queryParams.set('keyword', activeQuery);
-    }
 
     const res = await fetch(`/api/search?${queryParams.toString()}`);
     const data = await res.json();
@@ -2988,8 +3000,8 @@ window.handleSearchKeyUp = function(e) {
     if (query) {
       if (dropdown) dropdown.style.display = 'none';
       saveSearchHistory(query);
-      switchNav('category');
-      executeCategorySearch(true, query);
+      switchNav('search');
+      executeKeywordSearch(query);
     }
     return;
   }
