@@ -118,7 +118,41 @@ module.exports = async (req, res) => {
           }
         } catch (_) {}
 
+        const qWords = keyword.trim().toLowerCase().split(/\s+/).filter(w => w.length > 1);
+        if (qWords.length > 0) {
+          fastResults = fastResults.filter(item => {
+            const tLower = String(item.title || '').toLowerCase();
+            return qWords.some(w => tLower.includes(w));
+          });
+        }
+
         fastResults = deduplicateResults(fastResults);
+
+        const qLower = keyword.trim().toLowerCase();
+        const wordRegex = new RegExp('\\b' + qLower.replace(/[^a-z0-9]/g, '') + '\\b', 'i');
+
+        fastResults.sort((a, b) => {
+          const getScore = (item) => {
+            const t = String(item.title || '').toLowerCase();
+            const tClean = t.replace(/[^a-z0-9\s]/g, '');
+            let base = 0;
+            if (t === qLower || tClean === qLower) base = 100;
+            else if (t.startsWith(qLower)) base = 80;
+            else if (wordRegex.test(tClean)) base = 60;
+            else if (t.includes(qLower)) base = 40;
+
+            const isLoklok = !item.isNarto && !item.isViva && item.sourceName === 'Loklok HD';
+            const sourceBonus = isLoklok ? 30 : 0;
+            return base + sourceBonus;
+          };
+
+          const aScore = getScore(a);
+          const bScore = getScore(b);
+
+          if (aScore !== bScore) return bScore - aScore;
+          return 0;
+        });
+
         return res.status(200).json({
           success: true,
           results: fastResults,
