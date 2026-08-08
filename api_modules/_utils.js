@@ -79,9 +79,10 @@ function getLoklokHeaders(token = '') {
     'clienttype': 'android_tem3',
     'deviceid': deviceId,
     'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 12)',
-    'clientip': ip,
-    'x-forwarded-for': ip,
-    'x-real-ip': ip
+    'X-Forwarded-For': ip,
+    'X-Real-IP': ip,
+    'Clientip': ip,
+    'X-Client-IP': ip
   };
 
   if (cleanToken) {
