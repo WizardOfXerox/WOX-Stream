@@ -210,7 +210,7 @@ module.exports = async (req, res) => {
             if (!h5Res.ok) continue;
             const html = await h5Res.text();
             const scripts = Array.from(html.matchAll(/<script[^>]*>(.*?)<\/script>/gs)).map(m => m[1]);
-            const dataScript = scripts.find(s => s.includes('snssb') || s.includes('coverVerticalUrl') || s.includes('domainType'));
+            const dataScript = scripts.find(s => s.includes('Reactive') && (s.includes('snssb') || s.includes('cover') || s.includes('name')));
             if (dataScript) {
               const sandbox = { result: null };
               vm.runInNewContext('result = ' + dataScript, sandbox);
@@ -219,7 +219,7 @@ module.exports = async (req, res) => {
                 const h5Items = [];
                 for (let i = 0; i < arr.length; i++) {
                   const obj = arr[i];
-                  if (obj && typeof obj === 'object' && !Array.isArray(obj) && typeof obj.name === 'number' && typeof obj.coverVerticalUrl === 'number' && typeof obj.id === 'number') {
+                  if (obj && typeof obj === 'object' && !Array.isArray(obj) && typeof obj.name === 'number' && (typeof obj.coverVerticalUrl === 'number' || typeof obj.coverHorizontalUrl === 'number') && typeof obj.id === 'number') {
                     const name = arr[obj.name];
                     const cover = arr[obj.coverVerticalUrl] || arr[obj.coverHorizontalUrl];
                     const id = arr[obj.id];
