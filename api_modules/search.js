@@ -210,7 +210,7 @@ module.exports = async (req, res) => {
                 'True-Client-IP': '171.96.12.34',
                 'CF-Connecting-IP': '171.96.12.34'
               },
-              signal: AbortSignal.timeout(8000)
+              signal: AbortSignal.timeout(15000)
             });
             if (!h5Res.ok) continue;
             const html = await h5Res.text();
@@ -302,7 +302,7 @@ module.exports = async (req, res) => {
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.9'
               },
-              signal: AbortSignal.timeout(8000)
+              signal: AbortSignal.timeout(15000)
             });
             if (!h5Res.ok) continue;
             const html = await h5Res.text();
