@@ -43,9 +43,9 @@ function deduplicateResults(items) {
 async function scrapeH5GatewaySearch(keyword) {
   if (!keyword || !keyword.trim()) return [];
   const h5Gateways = [
+    `https://h5.loklok.site/search?keyword=${encodeURIComponent(keyword.trim())}`,
     `https://h5.decryptplan.com/search?keyword=${encodeURIComponent(keyword.trim())}`,
-    `https://h5.netpop.app/search?keyword=${encodeURIComponent(keyword.trim())}`,
-    `https://h5.loklok.site/search?keyword=${encodeURIComponent(keyword.trim())}`
+    `https://h5.netpop.app/search?keyword=${encodeURIComponent(keyword.trim())}`
   ];
 
   for (const gateUrl of h5Gateways) {
