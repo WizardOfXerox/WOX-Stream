@@ -6,14 +6,14 @@
       "maxDuration": 10
     }
   },
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/index.js?pathname=$1"
+      "source": "/api/:path*",
+      "destination": "/api/index.js?pathname=:path*"
     },
     {
-      "src": "/(.*)",
-      "dest": "/public/$1"
+      "source": "/:path*",
+      "destination": "/public/:path*"
     }
   ]
 }
