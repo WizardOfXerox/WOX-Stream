@@ -215,7 +215,7 @@ module.exports = async (req, res) => {
             if (!h5Res.ok) continue;
             const html = await h5Res.text();
             const scripts = Array.from(html.matchAll(/<script[^>]*>(.*?)<\/script>/gs)).map(m => m[1]);
-            const dataScript = scripts.find(s => s.includes('Reactive') && (s.includes('snssb') || s.includes('cover') || s.includes('name')));
+            const dataScript = scripts.find(s => s.includes('Reactive'));
             if (dataScript) {
               const sandbox = { result: null };
               vm.runInNewContext('result = ' + dataScript, sandbox);
@@ -224,13 +224,13 @@ module.exports = async (req, res) => {
                 const h5Items = [];
                 for (let i = 0; i < arr.length; i++) {
                   const obj = arr[i];
-                  if (obj && typeof obj === 'object' && !Array.isArray(obj) && typeof obj.name === 'number' && (typeof obj.coverVerticalUrl === 'number' || typeof obj.coverHorizontalUrl === 'number') && typeof obj.id === 'number') {
+                  if (obj && typeof obj === 'object' && !Array.isArray(obj) && typeof obj.name === 'number' && typeof obj.id === 'number') {
                     const name = arr[obj.name];
-                    const cover = arr[obj.coverVerticalUrl] || arr[obj.coverHorizontalUrl];
+                    const cover = (typeof obj.coverVerticalUrl === 'number' ? arr[obj.coverVerticalUrl] : null) || (typeof obj.coverHorizontalUrl === 'number' ? arr[obj.coverHorizontalUrl] : null) || '';
                     const id = arr[obj.id];
-                    const domainType = arr[obj.domainType] || obj.domainType;
-                    const score = arr[obj.score] || obj.score || '8.5';
-                    if (typeof name === 'string' && typeof cover === 'string' && id) {
+                    const domainType = (typeof obj.domainType === 'number' ? arr[obj.domainType] : null) || obj.domainType;
+                    const score = (typeof obj.score === 'number' ? arr[obj.score] : null) || obj.score || '8.5';
+                    if (typeof name === 'string' && id) {
                       h5Items.push({
                         id: String(id),
                         name: name,
@@ -307,7 +307,7 @@ module.exports = async (req, res) => {
             if (!h5Res.ok) continue;
             const html = await h5Res.text();
             const scripts = Array.from(html.matchAll(/<script[^>]*>(.*?)<\/script>/gs)).map(m => m[1]);
-            const dataScript = scripts.find(s => s.includes('Reactive') && (s.includes('snssb') || s.includes('cover') || s.includes('name')));
+            const dataScript = scripts.find(s => s.includes('Reactive'));
             if (dataScript) {
               const sandbox = { result: null };
               vm.runInNewContext('result = ' + dataScript, sandbox);
@@ -316,13 +316,13 @@ module.exports = async (req, res) => {
                 const h5Items = [];
                 for (let i = 0; i < arr.length; i++) {
                   const obj = arr[i];
-                  if (obj && typeof obj === 'object' && !Array.isArray(obj) && typeof obj.name === 'number' && (typeof obj.coverVerticalUrl === 'number' || typeof obj.coverHorizontalUrl === 'number') && typeof obj.id === 'number') {
+                  if (obj && typeof obj === 'object' && !Array.isArray(obj) && typeof obj.name === 'number' && typeof obj.id === 'number') {
                     const name = arr[obj.name];
-                    const cover = arr[obj.coverVerticalUrl] || arr[obj.coverHorizontalUrl];
+                    const cover = (typeof obj.coverVerticalUrl === 'number' ? arr[obj.coverVerticalUrl] : null) || (typeof obj.coverHorizontalUrl === 'number' ? arr[obj.coverHorizontalUrl] : null) || '';
                     const id = arr[obj.id];
-                    const domainType = arr[obj.domainType] || obj.domainType;
-                    const score = arr[obj.score] || obj.score || '8.5';
-                    if (typeof name === 'string' && typeof cover === 'string' && id) {
+                    const domainType = (typeof obj.domainType === 'number' ? arr[obj.domainType] : null) || obj.domainType;
+                    const score = (typeof obj.score === 'number' ? arr[obj.score] : null) || obj.score || '8.5';
+                    if (typeof name === 'string' && id) {
                       h5Items.push({
                         id: String(id),
                         name: name,
