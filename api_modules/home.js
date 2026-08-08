@@ -67,8 +67,10 @@ module.exports = async (req, res) => {
       }
     }
 
+    const loklokSectionsCount = resultSections.length;
+
     // Fallback: If Loklok home endpoint returned 0 Loklok items (e.g. cloud hosting IP restrictions), populate from Loklok catalog search
-    if (resultSections.length === 0) {
+    if (loklokSectionsCount === 0) {
       try {
         const fallbackRes = await fetch(`${LOKLOK_API_BASE}/search/v1/search`, {
           method: 'POST',
