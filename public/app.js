@@ -809,6 +809,26 @@ window.playEpisode = function(mediaArg, epArg) {
       });
 
       state.plyrPlayer = plyr;
+      state.artPlayer = plyr;
+
+      // Stream Party Host Broadcast Sync
+      const broadcastHostSync = () => {
+        if (state.party && state.party.active && state.party.isHost && !state.party.suppressSync && state.party.code) {
+          fetch('/api/stream-party?action=sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              code: state.party.code,
+              currentTime: plyr.currentTime || 0,
+              isPlaying: !plyr.paused
+            })
+          }).catch(() => {});
+        }
+      };
+
+      plyr.on('play', broadcastHostSync);
+      plyr.on('pause', broadcastHostSync);
+      plyr.on('seeked', broadcastHostSync);
 
       // Detect if URL is a direct MP4 file (not HLS)
       const isDirectMp4 = /\.mp4(\?|$)/i.test(rawSourceUrl) || /awscdn\.netshort\.com/i.test(rawSourceUrl);
@@ -3554,9 +3574,311 @@ function initMovieLinkRouter() {
     loadHomeFeed();
   }
 
+  const partyCode = urlParams.get('party') || urlParams.get('room') || urlParams.get('code');
+  if (partyCode) {
+    joinStreamPartyRoom(partyCode.toUpperCase());
+  }
+
   if (playId) {
     openDetailModal(playId, cat);
   }
+}
+
+state.party = {
+  active: false,
+  code: null,
+  isHost: false,
+  pollTimer: null,
+  lastMsgTime: 0,
+  lastReactTime: 0,
+  suppressSync: false
+};
+
+window.openStreamPartyModal = function() {
+  const codeInput = document.getElementById('party-code-input');
+  if (codeInput) codeInput.value = '';
+
+  if (state.party.active && state.party.code) {
+    const initView = document.getElementById('party-view-initial');
+    const actView = document.getElementById('party-view-active');
+    const badge = document.getElementById('party-room-badge');
+    if (initView) initView.style.display = 'none';
+    if (actView) actView.style.display = 'flex';
+    if (badge) {
+      badge.style.display = 'block';
+      badge.innerText = state.party.code;
+    }
+  } else {
+    const initView = document.getElementById('party-view-initial');
+    const actView = document.getElementById('party-view-active');
+    const badge = document.getElementById('party-room-badge');
+    if (initView) initView.style.display = 'flex';
+    if (actView) actView.style.display = 'none';
+    if (badge) badge.style.display = 'none';
+  }
+
+  openModal('modal-stream-party');
+};
+
+window.createStreamPartyRoom = async function() {
+  if (!state.currentMedia || !state.currentMedia.id) {
+    showToast('Please open or play a video first to start a Stream Party!');
+    return;
+  }
+
+  const u = state.user || {};
+  const hostName = u.username || u.nickName || 'Party Host';
+  const hostAvatar = u.avatar || u.portrait || '';
+
+  try {
+    const res = await fetch('/api/stream-party?action=create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mediaId: state.currentMedia.id,
+        title: state.currentMedia.title || 'Untitled',
+        cover: state.currentMedia.cover || '',
+        episodeId: state.currentEpisode ? state.currentEpisode.id : '',
+        episodeName: state.currentEpisode ? state.currentEpisode.name : '',
+        hostName,
+        hostAvatar
+      })
+    });
+    const data = await res.json();
+
+    if (data.success && data.roomCode) {
+      state.party.active = true;
+      state.party.code = data.roomCode;
+      state.party.isHost = true;
+      state.party.lastMsgTime = 0;
+      state.party.lastReactTime = 0;
+
+      const shareInput = document.getElementById('party-share-url');
+      if (shareInput) shareInput.value = data.shareUrl || `${window.location.origin}/?party=${data.roomCode}`;
+
+      const initView = document.getElementById('party-view-initial');
+      const actView = document.getElementById('party-view-active');
+      const badge = document.getElementById('party-room-badge');
+      if (initView) initView.style.display = 'none';
+      if (actView) actView.style.display = 'flex';
+      if (badge) {
+        badge.style.display = 'block';
+        badge.innerText = data.roomCode;
+      }
+
+      openModal('modal-stream-party');
+      startPartyPolling();
+      showToast(`🎉 Stream Party created! Code: ${data.roomCode}`);
+    } else {
+      showToast(data.error || 'Could not create party room.');
+    }
+  } catch (err) {
+    showToast('Failed to create Stream Party.');
+  }
+};
+
+window.joinStreamPartyByInput = function() {
+  const input = document.getElementById('party-code-input');
+  const code = input ? input.value.trim().toUpperCase() : '';
+  if (!code) return showToast('Please enter a valid room code.');
+  joinStreamPartyRoom(code);
+};
+
+window.joinStreamPartyRoom = async function(roomCode) {
+  const u = state.user || {};
+  const userName = u.username || u.nickName || `Viewer_${Math.floor(Math.random()*1000)}`;
+  const userAvatar = u.avatar || u.portrait || '';
+
+  try {
+    const res = await fetch('/api/stream-party?action=join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: roomCode, userName, userAvatar })
+    });
+    const data = await res.json();
+
+    if (data.success && data.room) {
+      state.party.active = true;
+      state.party.code = data.roomCode;
+      state.party.isHost = data.isHost;
+      state.party.lastMsgTime = 0;
+      state.party.lastReactTime = 0;
+
+      const shareUrl = `${window.location.origin}/?party=${data.roomCode}`;
+      const shareInput = document.getElementById('party-share-url');
+      if (shareInput) shareInput.value = shareUrl;
+
+      const initView = document.getElementById('party-view-initial');
+      const actView = document.getElementById('party-view-active');
+      const badge = document.getElementById('party-room-badge');
+      if (initView) initView.style.display = 'none';
+      if (actView) actView.style.display = 'flex';
+      if (badge) {
+        badge.style.display = 'block';
+        badge.innerText = data.roomCode;
+      }
+
+      // Auto-load host's current media if not open
+      const rMedia = data.room.media;
+      if (rMedia && rMedia.id && (!state.currentMedia || state.currentMedia.id !== rMedia.id)) {
+        openDetailModal(rMedia.id);
+      }
+
+      openModal('modal-stream-party');
+      startPartyPolling();
+      showToast(`Joined Stream Party ${data.roomCode}!`);
+    } else {
+      showToast(data.error || 'Stream Party room not found.');
+    }
+  } catch (err) {
+    showToast('Failed to join Stream Party.');
+  }
+};
+
+function startPartyPolling() {
+  if (state.party.pollTimer) clearInterval(state.party.pollTimer);
+  pollPartyUpdates();
+  state.party.pollTimer = setInterval(pollPartyUpdates, 1500);
+}
+
+async function pollPartyUpdates() {
+  if (!state.party.active || !state.party.code) return;
+
+  try {
+    const url = `/api/stream-party?action=get&code=${state.party.code}&sinceMsg=${state.party.lastMsgTime}&sinceReact=${state.party.lastReactTime}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data.success) {
+      state.party.active = false;
+      if (state.party.pollTimer) clearInterval(state.party.pollTimer);
+      return;
+    }
+
+    // Update participants count & avatars
+    const pCount = document.getElementById('party-participants-count');
+    if (pCount) pCount.innerText = `👥 ${data.participantCount || 1} Watching`;
+
+    const pList = document.getElementById('party-participants-list');
+    if (pList && data.participants) {
+      pList.innerHTML = data.participants.slice(0, 5).map(p => `
+        <img src="${p.avatar}" title="${escapeHtml(p.name)}" style="width:26px;height:26px;border-radius:50%;border:2px solid var(--accent-cyan);object-fit:cover;">
+      `).join('');
+    }
+
+    // Update chat messages
+    if (data.messages && data.messages.length > 0) {
+      const chatBox = document.getElementById('party-chat-messages');
+      if (chatBox) {
+        data.messages.forEach(m => {
+          if (m.timestamp > state.party.lastMsgTime) {
+            state.party.lastMsgTime = m.timestamp;
+            const isSys = m.sender === 'SYSTEM';
+            const msgHtml = isSys
+              ? `<div style="font-size:0.78rem;color:var(--text-muted);font-style:italic;">${escapeHtml(m.text)}</div>`
+              : `<div style="display:flex;gap:0.4rem;font-size:0.82rem;">
+                  <strong style="color:var(--accent-cyan);">${escapeHtml(m.sender)}:</strong>
+                  <span style="color:#fff;">${escapeHtml(m.text)}</span>
+                </div>`;
+            chatBox.insertAdjacentHTML('beforeend', msgHtml);
+            chatBox.scrollTop = chatBox.scrollHeight;
+          }
+        });
+      }
+    }
+
+    // Handle floating emoji reactions
+    if (data.reactions && data.reactions.length > 0) {
+      data.reactions.forEach(r => {
+        if (r.timestamp > state.party.lastReactTime) {
+          state.party.lastReactTime = r.timestamp;
+          spawnFloatingEmoji(r.emoji);
+        }
+      });
+    }
+
+    // Sync video state if viewer (not host)
+    if (!state.party.isHost && data.state && state.artPlayer) {
+      const pState = data.state;
+      const curTime = state.artPlayer.currentTime || 0;
+      if (Math.abs(curTime - pState.currentTime) > 3) {
+        state.party.suppressSync = true;
+        state.artPlayer.currentTime = pState.currentTime;
+        setTimeout(() => { state.party.suppressSync = false; }, 500);
+      }
+      if (pState.isPlaying && state.artPlayer.paused) {
+        state.artPlayer.play();
+      } else if (!pState.isPlaying && !state.artPlayer.paused) {
+        state.artPlayer.pause();
+      }
+    }
+
+  } catch (_) {}
+}
+
+window.copyPartyShareLink = function() {
+  const shareInput = document.getElementById('party-share-url');
+  if (shareInput) {
+    shareInput.select();
+    navigator.clipboard.writeText(shareInput.value);
+    showToast('Party share link copied to clipboard!');
+  }
+};
+
+window.sendPartyChatMessage = async function() {
+  const input = document.getElementById('party-chat-input');
+  const text = input ? input.value.trim() : '';
+  if (!text || !state.party.code) return;
+
+  input.value = '';
+  const u = state.user || {};
+  const senderName = u.username || u.nickName || 'Viewer';
+  const senderAvatar = u.avatar || '';
+
+  try {
+    await fetch('/api/stream-party?action=message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: state.party.code, text, senderName, senderAvatar })
+    });
+    pollPartyUpdates();
+  } catch (_) {}
+};
+
+window.handlePartyChatKeyUp = function(e) {
+  if (e.key === 'Enter') sendPartyChatMessage();
+};
+
+window.sendPartyReaction = async function(emoji) {
+  if (!state.party.code) return;
+  const u = state.user || {};
+  const senderName = u.username || u.nickName || 'Viewer';
+  spawnFloatingEmoji(emoji);
+
+  try {
+    await fetch('/api/stream-party?action=reaction', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: state.party.code, emoji, senderName })
+    });
+  } catch (_) {}
+};
+
+function spawnFloatingEmoji(emoji) {
+  const container = document.getElementById('modal-player') || document.body;
+  const el = document.createElement('div');
+  el.innerText = emoji;
+  el.style.cssText = `
+    position: fixed;
+    bottom: 90px;
+    right: ${Math.floor(Math.random() * 80) + 20}px;
+    font-size: 2.2rem;
+    z-index: 1000000;
+    pointer-events: none;
+    animation: floatEmoji 2.2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  `;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 2300);
 }
 
 document.addEventListener('DOMContentLoaded', () => {

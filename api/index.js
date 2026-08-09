@@ -28,7 +28,8 @@ const MODULE_REGISTRY = {
   'adult': require('../api_modules/adult'),
   'viva': require('../api_modules/viva'),
   'anime-provider': require('../api_modules/anime-provider'),
-  'import-db': require('../api_modules/import-db')
+  'import-db': require('../api_modules/import-db'),
+  'stream-party': require('../api_modules/stream-party')
 };
 
 // Single Vercel Serverless Function entry point

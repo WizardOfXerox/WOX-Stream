@@ -82,9 +82,12 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/auth') return authHandler(req, res);
   if (pathname === '/api/calendar') return calendarHandler(req, res);
   if (pathname === '/api/collection') return collectionHandler(req, res);
-  if (pathname === '/api/appointments') return appointmentsHandler(req, res);
   if (pathname === '/api/import-db') return importDbHandler(req, res);
   if (pathname === '/api/convert-mp4') return convertMp4Handler(req, res);
+  if (pathname === '/api/stream-party') {
+    const streamPartyHandler = require('./api_modules/stream-party');
+    return streamPartyHandler(req, res);
+  }
 
   // Viva Platforms API Routes
   if (pathname === '/api/viva' || pathname.startsWith('/api/viva')) {
