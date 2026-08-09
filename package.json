@@ -8,8 +8,11 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "https-proxy-agent": "^9.1.0",
     "node-fetch": "^2.7.0",
+    "pg": "^8.23.0",
+    "playwright": "^1.62.1",
     "undici": "^8.10.0"
   },
   "engines": {

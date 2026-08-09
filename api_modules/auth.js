@@ -1,5 +1,5 @@
 const { setCorsHeaders, hashPassword, verifyPassword, generateToken, parseToken } = require('./_utils');
-const { readDb, writeDb } = require('./_db');
+const { readDb, writeDb, getSql, initNeonTables, hasNeon } = require('./_db');
 
 module.exports = async (req, res) => {
   setCorsHeaders(res);
@@ -8,7 +8,10 @@ module.exports = async (req, res) => {
   const action = req.query.action || req.body?.action || 'me';
 
   try {
-    const db = readDb();
+    const isNeon = hasNeon();
+    if (isNeon) await initNeonTables();
+    const sql = isNeon ? getSql() : null;
+    const db = isNeon ? null : readDb();
 
     // 1. REGISTER USER ACCOUNT
     if (action === 'register') {
@@ -17,25 +20,41 @@ module.exports = async (req, res) => {
         return res.status(400).json({ success: false, error: 'Username, email, and password are required.' });
       }
 
-      const existingUser = db.users.find(u => u.email.toLowerCase() === email.toLowerCase() || u.username.toLowerCase() === username.toLowerCase());
-      if (existingUser) {
-        return res.status(400).json({ success: false, error: 'User account with this email or username already exists.' });
+      if (isNeon) {
+        const existing = await sql`SELECT id FROM wox_users WHERE LOWER(email) = LOWER(${email.trim()}) OR LOWER(username) = LOWER(${username.trim()}) LIMIT 1`;
+        if (existing.length > 0) {
+          return res.status(400).json({ success: false, error: 'User account with this email or username already exists.' });
+        }
+      } else {
+        const existingUser = db.users.find(u => u.email.toLowerCase() === email.toLowerCase() || u.username.toLowerCase() === username.toLowerCase());
+        if (existingUser) {
+          return res.status(400).json({ success: false, error: 'User account with this email or username already exists.' });
+        }
       }
 
       const userId = 'wox_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
       const { salt, hash } = hashPassword(password);
+      const avatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(username)}`;
+
       const newUser = {
         id: userId,
         username: username.trim(),
         email: email.trim().toLowerCase(),
         salt: salt,
         passwordHash: hash,
-        avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(username)}`,
+        avatar: avatar,
         createdAt: Date.now()
       };
 
-      db.users.push(newUser);
-      writeDb(db);
+      if (isNeon) {
+        await sql`
+          INSERT INTO wox_users (id, username, email, salt, password_hash, avatar, created_at)
+          VALUES (${newUser.id}, ${newUser.username}, ${newUser.email}, ${newUser.salt}, ${newUser.passwordHash}, ${newUser.avatar}, ${newUser.createdAt})
+        `;
+      } else {
+        db.users.push(newUser);
+        writeDb(db);
+      }
 
       const token = generateToken(newUser);
 
@@ -61,18 +80,27 @@ module.exports = async (req, res) => {
       }
 
       const targetStr = emailOrUsername.trim().toLowerCase();
-      const user = db.users.find(u => u.email.toLowerCase() === targetStr || u.username.toLowerCase() === targetStr);
+      let user = null;
+
+      if (isNeon) {
+        const rows = await sql`SELECT * FROM wox_users WHERE LOWER(email) = ${targetStr} OR LOWER(username) = ${targetStr} LIMIT 1`;
+        if (rows.length > 0) {
+          const r = rows[0];
+          user = {
+            id: r.id,
+            username: r.username,
+            email: r.email,
+            salt: r.salt,
+            passwordHash: r.password_hash,
+            avatar: r.avatar
+          };
+        }
+      } else {
+        user = db.users.find(u => u.email.toLowerCase() === targetStr || u.username.toLowerCase() === targetStr);
+      }
 
       if (!user || !verifyPassword(password, user.salt || '', user.passwordHash || '')) {
         return res.status(401).json({ success: false, error: 'Invalid email/username or password.' });
-      }
-
-      // Automatically upgrade legacy plain SHA-256 password hash to PBKDF2 salted hash
-      if (!user.salt) {
-        const { salt, hash } = hashPassword(password);
-        user.salt = salt;
-        user.passwordHash = hash;
-        writeDb(db);
       }
 
       const token = generateToken(user);
@@ -97,7 +125,14 @@ module.exports = async (req, res) => {
       const payload = parseToken(tokenStr);
 
       if (payload && payload.userId) {
-        const user = db.users.find(u => u.id === payload.userId);
+        let user = null;
+        if (isNeon) {
+          const rows = await sql`SELECT id, username, email, avatar FROM wox_users WHERE id = ${payload.userId} LIMIT 1`;
+          if (rows.length > 0) user = rows[0];
+        } else {
+          user = db.users.find(u => u.id === payload.userId);
+        }
+
         if (user) {
           return res.status(200).json({
             success: true,
@@ -127,28 +162,47 @@ module.exports = async (req, res) => {
         return res.status(401).json({ success: false, error: 'Unauthorized' });
       }
 
-      const userIdx = db.users.findIndex(u => u.id === payload.userId);
-      if (userIdx === -1) {
-        return res.status(404).json({ success: false, error: 'User not found' });
-      }
-
       const { avatar, username } = req.body || {};
-      if (avatar) db.users[userIdx].avatar = avatar.trim();
-      if (username) db.users[userIdx].username = username.trim();
-      writeDb(db);
 
-      const updatedUser = db.users[userIdx];
-      return res.status(200).json({
-        success: true,
-        user: {
-          id: updatedUser.id,
-          username: updatedUser.username,
-          nickName: updatedUser.username,
-          email: updatedUser.email,
-          avatar: updatedUser.avatar,
-          portrait: updatedUser.avatar
+      if (isNeon) {
+        if (avatar) await sql`UPDATE wox_users SET avatar = ${avatar.trim()} WHERE id = ${payload.userId}`;
+        if (username) await sql`UPDATE wox_users SET username = ${username.trim()} WHERE id = ${payload.userId}`;
+        const rows = await sql`SELECT id, username, email, avatar FROM wox_users WHERE id = ${payload.userId} LIMIT 1`;
+        const updatedUser = rows[0];
+
+        return res.status(200).json({
+          success: true,
+          user: {
+            id: updatedUser.id,
+            username: updatedUser.username,
+            nickName: updatedUser.username,
+            email: updatedUser.email,
+            avatar: updatedUser.avatar,
+            portrait: updatedUser.avatar
+          }
+        });
+      } else {
+        const userIdx = db.users.findIndex(u => u.id === payload.userId);
+        if (userIdx === -1) {
+          return res.status(404).json({ success: false, error: 'User not found' });
         }
-      });
+        if (avatar) db.users[userIdx].avatar = avatar.trim();
+        if (username) db.users[userIdx].username = username.trim();
+        writeDb(db);
+
+        const updatedUser = db.users[userIdx];
+        return res.status(200).json({
+          success: true,
+          user: {
+            id: updatedUser.id,
+            username: updatedUser.username,
+            nickName: updatedUser.username,
+            email: updatedUser.email,
+            avatar: updatedUser.avatar,
+            portrait: updatedUser.avatar
+          }
+        });
+      }
     }
 
     return res.status(200).json({

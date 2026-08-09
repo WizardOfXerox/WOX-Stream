@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { getSql, initNeonTables, hasNeon } = require('./_pg');
 
 // Lightweight persistent JSON database for WOX-Stream Cloud Accounts & Watch History
 const LOCAL_DB_DIR = path.join(__dirname, '..', 'data');
@@ -42,5 +43,8 @@ function writeDb(data) {
 
 module.exports = {
   readDb,
-  writeDb
+  writeDb,
+  getSql,
+  initNeonTables,
+  hasNeon
 };
