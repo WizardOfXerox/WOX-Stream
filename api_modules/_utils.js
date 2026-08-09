@@ -275,6 +275,79 @@ function decryptStreamTicket(ticket) {
   }
 }
 
+// 3. Robust Universal Title Deduplication Engine
+function cleanTitleForDeduplication(title) {
+  if (!title) return '';
+  return String(title)
+    // 1. Normalize unicode quotes & brackets
+    .replace(/[’‘`´]/g, "'")
+    .replace(/[（【]/g, '(')
+    .replace(/[）】]/g, ')')
+    // 2. Remove provider prefixes
+    .replace(/^\[(?:narto|loklok|viva|hollywood|classics|anime|adult)\]\s*/gi, '')
+    // 3. Remove language/dub/sub/quality brackets
+    .replace(/\s*\([^)]*(?:india|korea|japan|philippines|china|indonesia|thailand|vietnam|us|uk|dub|sub|uncensored|hd|4k|1080p|720p|english|bahasa)[^)]*\)/gi, '')
+    // 4. Remove Season & Series suffixes
+    .replace(/\s*[-:\s]\s*season\s*\d+/gi, '')
+    .replace(/\s*\bseason\s*\d+\b/gi, '')
+    .replace(/\s*\bseries\s*\d+\b/gi, '')
+    .replace(/\s*\bs\d{1,2}\b/gi, '')
+    .replace(/\s*[-:\s]\s*full\s*episodes?\b/gi, '')
+    .replace(/\s*[-:\s]\s*\d+\s*$/gi, '') // trailing - 2, : 3
+    .replace(/\s*\b\d{4}\b/g, '') // year tags like 2024
+    .trim();
+}
+
+function normalizeTitleKey(title) {
+  const cleaned = cleanTitleForDeduplication(title);
+  return cleaned.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function robustDeduplicate(items) {
+  if (!Array.isArray(items)) return [];
+  const map = new Map();
+  const seenIds = new Set();
+
+  for (const item of items) {
+    if (!item || !item.title || !item.id) continue;
+    if (seenIds.has(item.id)) continue;
+    seenIds.add(item.id);
+
+    const normKey = normalizeTitleKey(item.title);
+    if (!normKey) continue;
+
+    const currentMirror = {
+      id: item.id,
+      sourceKey: item.sourceKey || (item.isNarto ? 'narto' : (item.isViva ? 'viva' : 'loklok')),
+      sourceName: item.sourceName || (item.isNarto ? 'Narto Drama' : (item.isViva ? 'Viva' : 'Loklok HD')),
+      category: item.category
+    };
+
+    if (!map.has(normKey)) {
+      const cleanDisplayTitle = cleanTitleForDeduplication(item.title) || item.title;
+      map.set(normKey, {
+        ...item,
+        title: cleanDisplayTitle,
+        mirrors: item.mirrors && item.mirrors.length > 0 ? item.mirrors : [currentMirror]
+      });
+    } else {
+      const existing = map.get(normKey);
+      if (!existing.mirrors) existing.mirrors = [];
+      if (!existing.mirrors.some(m => m.id === item.id)) {
+        existing.mirrors.push(currentMirror);
+      }
+      if ((!existing.cover || existing.cover.includes('placeholder')) && item.cover) {
+        existing.cover = item.cover;
+      }
+      if (!existing.score && item.score) {
+        existing.score = item.score;
+      }
+    }
+  }
+
+  return Array.from(map.values());
+}
+
 module.exports = {
   LOKLOK_API_BASE,
   PROVIDER_PREFIXES,
@@ -288,5 +361,8 @@ module.exports = {
   maskId,
   unmaskId,
   createStreamTicket,
-  decryptStreamTicket
+  decryptStreamTicket,
+  cleanTitleForDeduplication,
+  normalizeTitleKey,
+  robustDeduplicate
 };

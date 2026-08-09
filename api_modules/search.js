@@ -1,5 +1,8 @@
-const crypto = require('crypto');
-const { getLoklokHeaders, getNartoHeaders, setCorsHeaders, fixCoverUrl, LOKLOK_API_BASE, sanitizeToken, maskId, loklokFetch } = require('./_utils');
+const { getLoklokHeaders, getNartoHeaders, setCorsHeaders, fixCoverUrl, LOKLOK_API_BASE, sanitizeToken, maskId, loklokFetch, robustDeduplicate } = require('./_utils');
+
+function deduplicateResults(items) {
+  return robustDeduplicate(items);
+}
 
 // ===== Reverse-Engineered H5 Web API Signed Client =====
 // Extracted from h5.loklok.site Nuxt 3 bundle (entry.4f52e398.js)

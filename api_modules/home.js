@@ -1,4 +1,4 @@
-const { getLoklokHeaders, setCorsHeaders, fixCoverUrl, loklokFetch, maskId } = require('./_utils');
+const { getLoklokHeaders, setCorsHeaders, fixCoverUrl, loklokFetch, maskId, robustDeduplicate } = require('./_utils');
 
 module.exports = async (req, res) => {
   setCorsHeaders(res);
@@ -58,11 +58,13 @@ module.exports = async (req, res) => {
         return true;
       });
 
-      if (items.length > 0) {
+      const dedupedItems = robustDeduplicate(items);
+
+      if (dedupedItems.length > 0) {
         resultSections.push({
           title: sectionName,
           type: sectionType,
-          items: items
+          items: dedupedItems
         });
       }
     }
@@ -87,15 +89,17 @@ module.exports = async (req, res) => {
             domainType: item.domainType
           }));
 
+          const dedupedLoklok = robustDeduplicate(loklokItems);
+
           resultSections.unshift({
             title: '🔥 TRENDING MOVIES & SHOWS',
             type: 'SINGLE_ALBUM',
-            items: loklokItems.slice(0, 12)
+            items: dedupedLoklok.slice(0, 12)
           });
           resultSections.unshift({
             title: '✨ POPULAR RELEASES',
             type: 'SINGLE_ALBUM',
-            items: loklokItems.slice(12, 24)
+            items: dedupedLoklok.slice(12, 24)
           });
         }
       } catch (err) {
@@ -129,7 +133,7 @@ module.exports = async (req, res) => {
         await nartoFetch(nartoReq, nartoRes);
 
         if (nartoItems.length > 0) {
-          const formatted = nartoItems.slice(0, 10).map(nItem => ({
+          const formatted = nartoItems.map(nItem => ({
             id: maskId('narto', nItem.id),
             category: '1',
             title: String(nItem.title || '').replace(/^\[narto\]\s*/i, '').trim(),
@@ -139,7 +143,8 @@ module.exports = async (req, res) => {
             sourceName: 'WOX Stream',
             isNarto: true
           }));
-          return { title: '🔥 POPULAR ASIAN SHORT DRAMAS', type: 'NARTO_SECTION', items: formatted };
+          const dedupedNarto = robustDeduplicate(formatted).slice(0, 12);
+          return { title: '🔥 POPULAR ASIAN SHORT DRAMAS', type: 'NARTO_SECTION', items: dedupedNarto };
         }
       } catch (_) {}
       return null;
@@ -151,7 +156,10 @@ module.exports = async (req, res) => {
         const classicsModule = require('./classics');
         const classicsRes = await classicsModule.fetchClassicsShelves();
         if (classicsRes && classicsRes.shelves && Array.isArray(classicsRes.shelves)) {
-          return classicsRes.shelves.filter(s => s.items && s.items.length > 0);
+          return classicsRes.shelves.map(s => ({
+            ...s,
+            items: robustDeduplicate(s.items)
+          })).filter(s => s.items && s.items.length > 0);
         }
       } catch (_) {}
       return null;
@@ -172,8 +180,10 @@ module.exports = async (req, res) => {
           if (hsItems && hsItems.length > 0) combined.push(...hsItems.slice(0, 6));
           if (hmItems && hmItems.length > 0) combined.push(...hmItems.slice(0, 6));
 
-          if (combined.length > 0) {
-            return { title: '🔞 TRENDING ADULT ANIME (18+)', type: 'ADULT_SECTION', items: combined };
+          const dedupedAdult = robustDeduplicate(combined);
+
+          if (dedupedAdult.length > 0) {
+            return { title: '🔞 TRENDING ADULT ANIME (18+)', type: 'ADULT_SECTION', items: dedupedAdult };
           }
         } catch (_) {}
         return null;

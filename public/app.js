@@ -3024,9 +3024,45 @@ async function loadHomeFeed() {
   }
 }
 
+function deduplicateClientMediaList(items) {
+  if (!Array.isArray(items)) return [];
+  const map = new Map();
+  const seenIds = new Set();
+
+  for (const item of items) {
+    if (!item || !item.title || !item.id) continue;
+    if (seenIds.has(item.id)) continue;
+    seenIds.add(item.id);
+
+    const normKey = String(item.title)
+      .replace(/[’‘`´]/g, "'")
+      .replace(/[（【]/g, '(')
+      .replace(/[）】]/g, ')')
+      .replace(/^\[(?:narto|loklok|viva|hollywood|classics|anime|adult)\]\s*/gi, '')
+      .replace(/\s*\([^)]*(?:india|korea|japan|philippines|china|indonesia|thailand|vietnam|us|uk|dub|sub|uncensored|hd|4k|1080p|720p|english|bahasa)[^)]*\)/gi, '')
+      .replace(/\s*[-:\s]\s*season\s*\d+/gi, '')
+      .replace(/\s*\bseason\s*\d+\b/gi, '')
+      .replace(/\s*\bseries\s*\d+\b/gi, '')
+      .replace(/\s*\bs\d{1,2}\b/gi, '')
+      .replace(/\s*[-:\s]\s*full\s*episodes?\b/gi, '')
+      .replace(/\s*[-:\s]\s*\d+\s*$/gi, '')
+      .replace(/\s*\b\d{4}\b/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+
+    if (!normKey) continue;
+
+    if (!map.has(normKey)) {
+      map.set(normKey, item);
+    }
+  }
+
+  return Array.from(map.values());
+}
+
 function filterContentBySettings(items) {
   if (!Array.isArray(items)) return [];
-  return items.filter(item => {
+  const filtered = items.filter(item => {
     const title = (item.title || '').toLowerCase();
     if (state.settings.blockLgbt && (title.includes('lgbt') || title.includes('queer') || title.includes('gay') || title.includes('lesbian'))) {
       return false;
@@ -3036,6 +3072,7 @@ function filterContentBySettings(items) {
     }
     return true;
   });
+  return deduplicateClientMediaList(filtered);
 }
 
 function renderWoxCard(item, isHighPriority = false) {
