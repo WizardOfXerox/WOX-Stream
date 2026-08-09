@@ -24,7 +24,8 @@ const fetchDramaPaginated = async (page = 1, type = 2) => {
   const dramaType = type || 2;
   try {
     const response = await fetch(`${BASE_URL}/DramaList/List?page=${page}&type=${dramaType}&sub=0&country=0&status=0&order=1`, {
-      headers: HEADERS
+      headers: HEADERS,
+      signal: AbortSignal.timeout(3000)
     });
     if (response.ok) {
       const data = await response.json();
@@ -165,7 +166,8 @@ const getDramaDetail = async (id) => {
   
   try {
     const response = await fetch(`${BASE_URL}/DramaList/Drama/${rawId}?is498=false`, {
-      headers: HEADERS
+      headers: HEADERS,
+      signal: AbortSignal.timeout(3000)
     });
     
     if (response.ok) {
@@ -217,7 +219,8 @@ const getDramaDetail = async (id) => {
 const getDramaEpisode = async (episodeId) => {
   try {
     const streamRes = await fetch(`${BASE_URL}/DramaList/Episode/${episodeId}.png?err=false&ts=&time=`, {
-      headers: HEADERS
+      headers: HEADERS,
+      signal: AbortSignal.timeout(3000)
     });
     
     if (!streamRes.ok) throw new Error('Failed to fetch stream');
@@ -264,7 +267,8 @@ const handler = async (req, res) => {
       case 'catalog':
       case 'shelves': {
         const shelves = await fetchDramaShelves();
-        return res.json({ success: true, data: shelves });
+        const items = Array.isArray(shelves) ? shelves.flatMap(s => s.items || (s.id ? [s] : [])) : [];
+        return res.json({ success: true, data: shelves, items, shelves });
       }
       case 'search': {
         if (!q) return res.json({ success: false, error: 'Missing query' });
@@ -294,3 +298,5 @@ module.exports = handler;
 module.exports.fetchDramaShelves = fetchDramaShelves;
 module.exports.fetchDramaPaginated = fetchDramaPaginated;
 module.exports.searchDrama = searchDrama;
+module.exports.getDramaDetail = getDramaDetail;
+module.exports.getDramaEpisode = getDramaEpisode;

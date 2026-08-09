@@ -688,9 +688,10 @@ module.exports = async function vivaHandler(req, res) {
     }
 
     if (action === 'detail') {
-      const rawId = query.id || '';
-      const cleanId = rawId.replace(/^(vivaone_|vivamax_|vivamb_)/, '');
-      const item = VIVA_CATALOG_ITEMS.find(i => i.id === rawId || i.id.endsWith(cleanId));
+      const rawId = query.id || query.contentId || '';
+      const { id: unmaskedId } = unmaskId(rawId);
+      const cleanId = unmaskedId.replace(/^(vivaone_|vivamax_|vivamb_)/, '');
+      const item = VIVA_CATALOG_ITEMS.find(i => i.id === rawId || i.id === unmaskedId || i.id.endsWith(cleanId));
 
       if (!item) {
         return res.status(404).json({ success: false, error: 'Viva content not found' });
@@ -741,10 +742,11 @@ module.exports = async function vivaHandler(req, res) {
     }
 
     if (action === 'episode') {
-      const contentId = query.contentId || '';
+      const contentId = query.contentId || query.id || '';
       const episodeId = query.episodeId || '';
-      const cleanId = contentId.replace(/^(vivaone_|vivamax_|vivamb_)/, '');
-      const item = VIVA_CATALOG_ITEMS.find(i => i.id === contentId || i.id.endsWith(cleanId));
+      const { id: unmaskedId } = unmaskId(contentId);
+      const cleanId = unmaskedId.replace(/^(vivaone_|vivamax_|vivamb_)/, '');
+      const item = VIVA_CATALOG_ITEMS.find(i => i.id === contentId || i.id === unmaskedId || i.id.endsWith(cleanId));
 
       if (!item) {
         return res.status(404).json({ success: false, error: 'Viva content not found' });

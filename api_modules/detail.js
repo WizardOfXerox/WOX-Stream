@@ -17,8 +17,9 @@ module.exports = async (req, res) => {
     const { provider, id } = unmaskId(rawId);
 
     // Delegate Viva One / VivaMax / Viva MovieBox items directly to Viva handler
-    if (provider === 'vivaone' || provider === 'vivamax' || provider === 'vivamb' || String(rawId).startsWith('viva')) {
+    if (provider === 'vivaone' || provider === 'vivamax' || provider === 'vivamoviebox' || provider === 'vivamb' || String(rawId).startsWith('viva')) {
       const vivaHandler = require('./viva');
+      req.query = req.query || {};
       req.query.action = 'detail';
       req.query.id = rawId;
       return vivaHandler(req, res);
@@ -27,7 +28,10 @@ module.exports = async (req, res) => {
     // Delegate Narto Drama items directly to Narto handler
     if (provider === 'narto' || String(rawId).startsWith('narto_')) {
       const nartoHandler = require('./narto');
-      req.url = `/detail?slug=${encodeURIComponent(id)}`;
+      req.query = req.query || {};
+      req.query.slug = id.replace(/^narto_/, '');
+      req.query.id = req.query.slug;
+      req.url = `/detail?slug=${encodeURIComponent(req.query.slug)}`;
       return nartoHandler(req, res);
     }
 

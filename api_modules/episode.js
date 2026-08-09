@@ -13,7 +13,11 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    let { contentId: rawContentId, episodeId, category = '1', definition = 'GROOT_HD' } = req.query;
+    let rawContentId = req.query.contentId || req.query.id;
+    let episodeId = req.query.episodeId || req.query.episode || '1';
+    let category = req.query.category || '1';
+    let definition = req.query.definition || 'GROOT_HD';
+
     if (!category || category === 'undefined' || category === 'null') {
       category = '1';
     }
@@ -28,10 +32,12 @@ module.exports = async (req, res) => {
     const { provider, id: contentId } = unmaskId(rawContentId);
 
     // Delegate Viva One / VivaMax / Viva MovieBox episode requests to Viva handler
-    if (provider === 'vivaone' || provider === 'vivamax' || provider === 'vivamb' || String(rawContentId).startsWith('viva')) {
+    if (provider === 'vivaone' || provider === 'vivamax' || provider === 'vivamoviebox' || provider === 'vivamb' || String(rawContentId).startsWith('viva')) {
       const vivaHandler = require('./viva');
+      req.query = req.query || {};
       req.query.action = 'episode';
       req.query.id = rawContentId;
+      req.query.contentId = rawContentId;
       req.query.episodeId = episodeId;
       return vivaHandler(req, res);
     }
@@ -68,10 +74,74 @@ module.exports = async (req, res) => {
       return res.status(404).json({ success: false, error: 'HentaiMama video stream not found' });
     }
 
+    // Delegate Hollywood episode stream requests
+    if (provider === 'hollywood') {
+      const hollywoodModule = require('./hollywood');
+      const detailRes = await hollywoodModule.getDetail(rawContentId, req.query);
+      if (detailRes && detailRes.embedServers && detailRes.embedServers.length > 0) {
+        const playUrl = detailRes.embedServers[0].url;
+        return res.status(200).json({
+          success: true,
+          playUrl,
+          mediaUrl: playUrl,
+          streamUrl: playUrl,
+          streamType: 'embed',
+          embedServers: detailRes.embedServers,
+          subtitles: []
+        });
+      }
+      return res.status(404).json({ success: false, error: 'Hollywood stream not found' });
+    }
+
+    // Delegate Anime episode stream requests
+    if (provider === 'anime') {
+      const animeModule = require('./anime-provider');
+      const detailRes = await animeModule.getAnimeDetail(rawContentId);
+      if (detailRes && detailRes.detail && detailRes.detail.episodes) {
+        const ep = detailRes.detail.episodes.find(e => String(e.id) === String(episodeId)) || detailRes.detail.episodes[0];
+        const playUrl = ep ? (ep.embedUrl || ep.playUrl) : null;
+        if (playUrl) {
+          return res.status(200).json({
+            success: true,
+            playUrl,
+            mediaUrl: playUrl,
+            streamUrl: playUrl,
+            streamType: 'embed',
+            subtitles: []
+          });
+        }
+      }
+      return res.status(404).json({ success: false, error: 'Anime stream not found' });
+    }
+
+    // Delegate Asian Drama episode stream requests
+    if (provider === 'drama') {
+      const dramaModule = require('./asian-drama');
+      const detailRes = await dramaModule.getDramaDetail(rawContentId);
+      if (detailRes && detailRes.detail && detailRes.detail.episodes) {
+        const ep = detailRes.detail.episodes.find(e => String(e.id) === String(episodeId)) || detailRes.detail.episodes[0];
+        const playUrl = ep ? (ep.embedUrl || ep.playUrl) : null;
+        if (playUrl) {
+          return res.status(200).json({
+            success: true,
+            playUrl,
+            mediaUrl: playUrl,
+            streamUrl: playUrl,
+            streamType: 'embed',
+            subtitles: []
+          });
+        }
+      }
+      return res.status(404).json({ success: false, error: 'Asian drama stream not found' });
+    }
+
     // Delegate Narto Drama episode requests to Narto handler
     if (provider === 'narto' || String(rawContentId).startsWith('narto_')) {
       const nartoHandler = require('./narto');
-      req.url = `/episode?slug=${encodeURIComponent(contentId)}&episode=${encodeURIComponent(episodeId)}`;
+      req.query = req.query || {};
+      req.query.slug = contentId.replace(/^narto_/, '');
+      req.query.episode = episodeId;
+      req.url = `/episode?slug=${encodeURIComponent(req.query.slug)}&episode=${encodeURIComponent(episodeId)}`;
       return nartoHandler(req, res);
     }
 

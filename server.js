@@ -136,7 +136,7 @@ const server = http.createServer(async (req, res) => {
 
   // Adult API Route
   if (pathname.startsWith('/api/adult')) {
-    const adultHandler = require('./api/adult');
+    const adultHandler = require('./api_modules/adult');
     return adultHandler(req, res);
   }
 

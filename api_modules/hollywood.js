@@ -297,3 +297,4 @@ module.exports = handler;
 module.exports.fetchHollywoodShelves = fetchHollywoodShelves;
 module.exports.fetchHollywoodPaginated = fetchHollywoodPaginated;
 module.exports.searchHollywood = searchHollywood;
+module.exports.getDetail = getDetail;

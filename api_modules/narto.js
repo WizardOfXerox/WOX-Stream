@@ -292,6 +292,8 @@ module.exports = async function nartoHandler(req, res) {
 
       return res.json({
         success: true,
+        playUrl: playUrl,
+        mediaUrl: playUrl,
         streamUrl: playUrl,
         subtitles: subs
       });

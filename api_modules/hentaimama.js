@@ -139,38 +139,64 @@ async function getHentaiMamaPlayUrl(epPath) {
     if (!pageRes.ok) return null;
     const html = await pageRes.text();
 
-    const actionMatch = html.match(/action:\s*'get_player_contents'[\s\S]*?a:\s*'([^']+)'/i);
+    let iframeUrl = '';
+    const actionMatch = html.match(/action:\s*['"]get_player_contents['"][\s\S]*?a:\s*['"]?(\d+)['"]?/i);
     const actionVal = actionMatch ? actionMatch[1] : '';
 
-    if (!actionVal) return null;
+    if (actionVal) {
+      try {
+        const params = new URLSearchParams();
+        params.append('action', 'get_player_contents');
+        params.append('a', actionVal);
 
-    const params = new URLSearchParams();
-    params.append('action', 'get_player_contents');
-    params.append('a', actionVal);
+        const ajaxRes = await fetch(`${BASE_URL}/wp-admin/admin-ajax.php`, {
+          method: 'POST',
+          headers: {
+            ...HEADERS,
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Referer': fullUrl,
+            'Origin': BASE_URL
+          },
+          body: params.toString()
+        });
 
-    const ajaxRes = await fetch(`${BASE_URL}/wp-admin/admin-ajax.php`, {
-      method: 'POST',
-      headers: {
-        ...HEADERS,
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'X-Requested-With': 'XMLHttpRequest'
-      },
-      body: params.toString()
+        if (ajaxRes.ok) {
+          const ajaxJson = await ajaxRes.json();
+          if (Array.isArray(ajaxJson) && ajaxJson.length > 0) {
+            for (const field of ajaxJson) {
+              const match = field.match(/src=["']([^"']+)["']/i);
+              if (match) {
+                iframeUrl = match[1];
+                break;
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!iframeUrl) {
+      const fallbackIframe = html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+      if (fallbackIframe) iframeUrl = fallbackIframe[1];
+    }
+
+    if (!iframeUrl) return null;
+
+    if (iframeUrl.startsWith('//')) iframeUrl = 'https:' + iframeUrl;
+    iframeUrl = iframeUrl.replace(/\\\//g, '/');
+
+    const iframeRes = await fetch(iframeUrl, {
+      headers: { ...HEADERS, 'Referer': fullUrl }
     });
 
-    if (!ajaxRes.ok) return null;
-    const ajaxJson = await ajaxRes.json();
-    if (!Array.isArray(ajaxJson) || ajaxJson.length === 0) return null;
-
-    const iframeMatch = ajaxJson[0].match(/src="([^"]+)"/i);
-    if (!iframeMatch) return null;
-
-    const iframeUrl = iframeMatch[1];
-    const iframeRes = await fetch(iframeUrl, { headers: HEADERS });
     if (!iframeRes.ok) return null;
     const iframeHtml = await iframeRes.text();
 
-    const mp4Match = iframeHtml.match(/file:\s*["']([^"']+\.mp4[^"']*)["']/i) || iframeHtml.match(/(https?:[^\s"']+\.mp4[^\s"']*)/i);
+    const mp4Match = iframeHtml.match(/file:\s*["']([^"']+\.(?:mp4|m3u8)[^"']*)["']/i) || 
+                     iframeHtml.match(/(https?:[^\s"']+\.(?:mp4|m3u8)[^\s"']*)/i) || 
+                     iframeHtml.match(/<source[^>]+src=["']([^"']+)["']/i);
+
     if (!mp4Match) return null;
 
     return {
