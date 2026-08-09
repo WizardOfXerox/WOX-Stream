@@ -537,6 +537,7 @@ module.exports = async (req, res) => {
       // Category multi-filter search API
       const reqSource = (req.query.source || (req.body && req.body.source) || '').toLowerCase();
       const pageSize = 12;
+      const pageIdx = parseInt(page, 10) || 0;
 
       if (reqSource === 'vivaone' || reqSource === 'vivamax' || reqSource === 'vivamb' || reqSource === 'viva moviebox') {
         const sourceMap = { vivaone: 'vivaone', vivamax: 'vivamax', vivamb: 'vivamoviebox', 'viva moviebox': 'vivamoviebox' };
@@ -703,13 +704,14 @@ module.exports = async (req, res) => {
       let rawResults = [];
 
       // Determine search keyword based on category filters
-      let kwToSearch = 'movie';
-      if (params === 'MOVIE' || (params.includes('MOVIE') && !params.includes('COMIC') && !params.includes('MINISERIES') && !params.includes('TV'))) kwToSearch = 'movie';
-      else if (params && (params === 'COMIC' || (params.includes('COMIC') && !params.includes('MOVIE')))) kwToSearch = 'anime';
-      else if (params && params.includes('MINISERIES')) kwToSearch = 'short';
+      let kwToSearch = 'season';
+      if (params === 'MOVIE') kwToSearch = 'movie';
+      else if (params === 'COMIC' || params === 'ANIME') kwToSearch = 'anime';
+      else if (params === 'MINISERIES') kwToSearch = 'short';
       else if (area === '53') kwToSearch = 'korean drama';
       else if (area === '61' || area === 'US' || area === 'UK') kwToSearch = 'series';
       else if (category) kwToSearch = category;
+      else kwToSearch = 'season';
 
       try {
         const h5Res = await h5ApiSearch(kwToSearch);
@@ -717,6 +719,8 @@ module.exports = async (req, res) => {
           rawResults = h5Res;
         }
       } catch (err) { console.error('Category h5ApiSearch error:', err); }
+
+      console.log('SEARCH.JS DEBUG: kwToSearch:', kwToSearch, 'rawResults.length:', rawResults.length);
 
       // Fallback: If h5ApiSearch returned no items, try legacy LOKLOK_API_BASE
       if (rawResults.length === 0) {
