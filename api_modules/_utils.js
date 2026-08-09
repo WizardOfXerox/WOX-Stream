@@ -107,7 +107,7 @@ function setCorsHeaders(res) {
   }
 }
 
-// Matches Loklok.kt ensureAbsoluteCoverUrl & encodeUrl
+// Matches Loklok.kt ensureAbsoluteCoverUrl & encodeUrl with RAM/Edge proxy caching
 function fixCoverUrl(url) {
   if (!url) return '';
   let fullUrl = url;
@@ -120,6 +120,7 @@ function fixCoverUrl(url) {
                      .replace('image.loklok.tv', 'img.chhhn.com');
   }
 
+  let finalUrl = fullUrl;
   try {
     const schemeAndHost = fullUrl.substring(0, fullUrl.indexOf('://') + 3) + fullUrl.substring(fullUrl.indexOf('://') + 3).split('/')[0];
     const path = fullUrl.substring(fullUrl.indexOf('://') + 3).split('/').slice(1).join('/');
@@ -132,11 +133,13 @@ function fixCoverUrl(url) {
         .replace(/\)/g, '%29')
         .replace(/~/g, '%7E');
     }).join('/');
-
-    return `${schemeAndHost}/${encodedPath}`;
+    finalUrl = `${schemeAndHost}/${encodedPath}`;
   } catch (_) {
-    return encodeURI(fullUrl);
+    finalUrl = encodeURI(fullUrl);
   }
+
+  // Return high-performance proxied & cached image URL
+  return `/api/image?url=${encodeURIComponent(finalUrl)}`;
 }
 
 const { ProxyAgent } = require('undici');

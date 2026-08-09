@@ -11,8 +11,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = event.request.url;
 
-  // Intercept images from Loklok CDN, Narto CDN, or googleusercontent
-  if (url.includes('img.chhhn.com') || url.includes('narto-drama.com') || url.includes('netshort.com') || url.includes('googleusercontent.com') || url.includes('img-proxy') || url.endsWith('.webp') || url.endsWith('.jpg') || url.endsWith('.png')) {
+  // Intercept images from /api/image, Loklok CDN, Narto CDN, or googleusercontent
+  if (url.includes('/api/image') || url.includes('img.chhhn.com') || url.includes('narto-drama.com') || url.includes('netshort.com') || url.includes('googleusercontent.com') || url.includes('img-proxy') || url.endsWith('.webp') || url.endsWith('.jpg') || url.endsWith('.png')) {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
         const cachedResponse = await cache.match(event.request);
