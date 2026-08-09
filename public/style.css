@@ -1487,7 +1487,7 @@ input[type="search"]::-webkit-search-results-decoration {
   .content-wrapper {
     margin-left: 0 !important;
     width: 100% !important;
-    padding-bottom: 70px !important;
+    padding-bottom: 75px !important;
   }
 
   .top-navbar {
@@ -1506,18 +1506,18 @@ input[type="search"]::-webkit-search-results-decoration {
 
   .hero-banner {
     height: auto !important;
-    min-height: 240px;
+    min-height: 220px;
     margin: 0.5rem !important;
   }
 
   .hero-banner::before,
   .hero-banner::after {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
   }
 
   .hero-title-text {
-    font-size: 1.3rem !important;
+    font-size: 1.25rem !important;
   }
 
   .hero-description {
@@ -1533,8 +1533,8 @@ input[type="search"]::-webkit-search-results-decoration {
   }
 
   .card-grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important;
-    gap: 0.65rem !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 0.5rem !important;
   }
 
   .shelf-header {
@@ -1549,12 +1549,12 @@ input[type="search"]::-webkit-search-results-decoration {
     flex-direction: column !important;
     align-items: center !important;
     text-align: center !important;
-    padding: 1.5rem !important;
+    padding: 1.25rem !important;
   }
 
   .detail-cover {
-    width: 130px !important;
-    height: 190px !important;
+    width: 120px !important;
+    height: 175px !important;
     margin-bottom: 0.75rem !important;
   }
 
@@ -1567,12 +1567,26 @@ input[type="search"]::-webkit-search-results-decoration {
   }
 
   .main-view {
-    padding: 1rem 0.85rem 3rem 0.85rem !important;
+    padding: 0.75rem 0.5rem 3.5rem 0.5rem !important;
+  }
+
+  .filter-pills {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    padding-bottom: 0.25rem !important;
+  }
+
+  .filter-pills::-webkit-scrollbar {
+    display: none !important;
   }
 
   .filter-pill {
     font-size: 0.7rem !important;
-    padding: 0.3rem 0.55rem !important;
+    padding: 0.3rem 0.65rem !important;
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
   }
 }
 
@@ -1593,8 +1607,27 @@ input[type="search"]::-webkit-search-results-decoration {
 
 @media (max-width: 480px) {
   .card-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 0.5rem !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 0.4rem !important;
+  }
+
+  .poster-bottom-info {
+    padding: 0.25rem 0.35rem !important;
+  }
+
+  .poster-hd-tag {
+    font-size: 0.55rem !important;
+    padding: 1px 3px !important;
+  }
+
+  .badge-top-right {
+    font-size: 0.65rem !important;
+    padding: 1px 4px !important;
+  }
+
+  .card-poster-title {
+    font-size: 0.75rem !important;
+    -webkit-line-clamp: 1 !important;
   }
 
   .player-modal-container {
@@ -1620,6 +1653,11 @@ input[type="search"]::-webkit-search-results-decoration {
   .loklok-card::before,
   .loklok-card::after {
     display: none;
+  }
+
+  /* Smooth touch response on phones */
+  .loklok-card:active {
+    transform: scale(0.96);
   }
 }
 
