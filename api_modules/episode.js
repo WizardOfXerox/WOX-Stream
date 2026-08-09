@@ -120,10 +120,73 @@ module.exports = async (req, res) => {
     // Try targetEpId first, with fallback to original episodeId
     const episodeIdsToTry = Array.from(new Set([String(targetEpId), String(episodeId)]));
 
+    // Reverse-engineered H5 API helper for signed Loklok media preview stream retrieval
+    const { H5_RSA_PUBLIC_KEY, h5GenKey, h5GetSign, h5RsaEncrypt } = require('./search');
+
+    async function h5ApiGetMediaInfo(targetContentId, targetEpId, catVal, defVal) {
+      const randomKey = h5GenKey(16);
+      const currentTime = Date.now();
+      const tz = 0 - new Date().getTimezoneOffset() / 60;
+      const queryData = {
+        category: String(catVal),
+        contentId: String(targetContentId),
+        definition: String(defVal),
+        episodeId: String(targetEpId)
+      };
+      const sign = h5GetSign(queryData, randomKey, currentTime);
+      const aesKey = h5RsaEncrypt(randomKey);
+
+      const hosts = ['https://h5-api.loklok.site', 'https://h5-api.hehekang.com'];
+      const cfProxy = 'https://wox-stream-proxy.wizardofxerox.workers.dev/?url=';
+
+      for (const host of hosts) {
+        const targetUrl = `${host}/cms/v2/h5/media/previewInfo?category=${catVal}&contentId=${targetContentId}&episodeId=${targetEpId}&definition=${defVal}`;
+        const urlsToTry = [targetUrl, `${cfProxy}${encodeURIComponent(targetUrl)}`];
+
+        for (const url of urlsToTry) {
+          try {
+            const res = await fetch(url, {
+              method: 'GET',
+              headers: {
+                'sign': sign,
+                'aesKey': aesKey,
+                'currentTime': currentTime.toString(),
+                'clientType': 'H5',
+                'versionCode': '32',
+                'lang': 'en',
+                'deviceid': h5GenKey(32),
+                'timezone': `GMT${tz < 0 ? tz : '+' + tz}`,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://h5.loklok.site/',
+                'Origin': 'https://h5.loklok.site'
+              },
+              signal: AbortSignal.timeout(10000)
+            });
+            if (!res.ok) continue;
+            const data = await res.json();
+            if (data.code === '00000' && data.data && data.data.mediaUrl) {
+              return data.data;
+            }
+          } catch (_) {}
+        }
+      }
+      return null;
+    }
+
     // Outer loop through category fallbacks (0: Movie, 1: Series, 2: Variety)
     for (const cat of categoriesToTry) {
       for (const epId of episodeIdsToTry) {
         for (const def of definitionsToTry) {
+          const h5Media = await h5ApiGetMediaInfo(contentId, epId, cat, def);
+          if (h5Media && h5Media.mediaUrl) {
+            rawStreamUrl = h5Media.mediaUrl;
+            usedDefinition = def;
+            usedCategory = cat;
+            usedEpId = epId;
+            fileSize = h5Media.size || 0;
+            totalDuration = h5Media.totalDuration || 0;
+            break;
+          }
           try {
             const endpoint = `/media/previewInfo?category=${cat}&contentId=${contentId}&episodeId=${epId}&definition=${def}`;
             const data = await loklokFetch(endpoint, { headers });

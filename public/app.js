@@ -2077,14 +2077,11 @@ window.switchNav = function(viewName, pushUrl = true) {
   if (viewWatchlist) viewWatchlist.style.display = 'none';
 
   if (pushUrl && !window.location.search.includes('play=')) {
-    const urlParams = new URLSearchParams(window.location.search);
     if (viewName === 'home') {
-      urlParams.delete('view');
+      history.replaceState({ view: 'home' }, '', window.location.pathname);
     } else {
-      urlParams.set('view', viewName);
+      history.replaceState({ view: viewName }, '', `?view=${encodeURIComponent(viewName)}`);
     }
-    const newQuery = urlParams.toString() ? `?${urlParams.toString()}` : window.location.pathname;
-    history.replaceState({ view: viewName }, '', newQuery);
   }
 
   if (viewName === 'home') {

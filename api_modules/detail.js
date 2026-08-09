@@ -89,12 +89,66 @@ module.exports = async (req, res) => {
 
     const headers = getLoklokHeaders(token);
     
+    // Reverse-engineered H5 API helper for signed Loklok detail retrieval
+    const { H5_RSA_PUBLIC_KEY, h5GenKey, h5GetSign, h5RsaEncrypt } = require('./search');
+    
+    async function h5ApiGetDetail(targetId, catVal) {
+      const randomKey = h5GenKey(16);
+      const currentTime = Date.now();
+      const tz = 0 - new Date().getTimezoneOffset() / 60;
+      const queryData = { category: String(catVal), id: String(targetId) };
+      const sign = h5GetSign(queryData, randomKey, currentTime);
+      const aesKey = h5RsaEncrypt(randomKey);
+
+      const hosts = ['https://h5-api.loklok.site', 'https://h5-api.hehekang.com'];
+      const cfProxy = 'https://wox-stream-proxy.wizardofxerox.workers.dev/?url=';
+
+      for (const host of hosts) {
+        const targetUrl = `${host}/cms/v2/h5/movieDrama/get?id=${targetId}&category=${catVal}`;
+        const urlsToTry = [targetUrl, `${cfProxy}${encodeURIComponent(targetUrl)}`];
+
+        for (const url of urlsToTry) {
+          try {
+            const res = await fetch(url, {
+              method: 'GET',
+              headers: {
+                'sign': sign,
+                'aesKey': aesKey,
+                'currentTime': currentTime.toString(),
+                'clientType': 'H5',
+                'versionCode': '32',
+                'lang': 'en',
+                'deviceid': h5GenKey(32),
+                'timezone': `GMT${tz < 0 ? tz : '+' + tz}`,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://h5.loklok.site/',
+                'Origin': 'https://h5.loklok.site'
+              },
+              signal: AbortSignal.timeout(10000)
+            });
+            if (!res.ok) continue;
+            const data = await res.json();
+            if (data.code === '00000' && data.data) {
+              return data.data;
+            }
+          } catch (_) {}
+        }
+      }
+      return null;
+    }
+
     // Category retry list: try specified category first, then fallback to 0 (Movie) and 1 (TV Series)
-    const categoriesToTry = Array.from(new Set([String(initialCategory), '0', '1', '2']));
+    const categoriesToTry = Array.from(new Set([String(initialCategory), '1', '0', '2']));
     let drama = null;
     let usedCategory = initialCategory;
 
     for (const cat of categoriesToTry) {
+      drama = await h5ApiGetDetail(id, cat);
+      if (drama && (drama.name || drama.title || drama.episodeVo)) {
+        usedCategory = cat;
+        break;
+      }
+      // Legacy fallback
       try {
         const data = await loklokFetch(`/movieDrama/get?id=${id}&category=${cat}`, { headers });
         if ((data.code === '00000' || data.code === '000000') && data.data && (data.data.name || data.data.title || data.data.episodeVo)) {
