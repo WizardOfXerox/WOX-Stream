@@ -3266,7 +3266,7 @@ function deduplicateClientMediaList(items) {
       .replace(/[’‘`´]/g, "'")
       .replace(/[（【]/g, '(')
       .replace(/[）】]/g, ')')
-      .replace(/^\[(?:narto|loklok|viva|hollywood|classics|anime|adult)\]\s*/gi, '')
+      .replace(/^\[(?:narto|loklok|hollywood|classics|anime|adult)\]\s*/gi, '')
       .replace(/\s*\([^)]*(?:india|korea|japan|philippines|china|indonesia|thailand|vietnam|us|uk|dub|sub|uncensored|hd|4k|1080p|720p|english|bahasa)[^)]*\)/gi, '')
       .replace(/\s*[-:\s]\s*season\s*\d+/gi, '')
       .replace(/\s*\bseason\s*\d+\b/gi, '')
@@ -3294,7 +3294,7 @@ function filterContentBySettings(items) {
     if (!item) return false;
     const title = (item.title || '').toLowerCase();
     const srcKey = String(item.sourceKey || '').toLowerCase();
-    const isLoklok = !item.isNarto && !item.isViva && (srcKey === 'loklok' || item.sourceName === 'Loklok HD');
+    const isLoklok = !item.isNarto && (srcKey === 'loklok' || item.sourceName === 'Loklok HD');
 
     if (state.settings.blockLgbt && (title.includes('lgbt') || title.includes('queer') || title.includes('gay') || title.includes('lesbian'))) {
       return false;
@@ -3305,7 +3305,6 @@ function filterContentBySettings(items) {
 
     if (state.settings.sourceLoklok === false && isLoklok) return false;
     if (state.settings.sourceNarto === false && (item.isNarto || srcKey === 'narto')) return false;
-    if (state.settings.sourceViva === false && (item.isViva || srcKey.includes('viva'))) return false;
     if (state.settings.sourceHollywood === false && (srcKey === 'hollywood' || srcKey === 'flixhq')) return false;
     if (state.settings.sourceAnime === false && (srcKey === 'anime' || srcKey === 'drama')) return false;
     if (state.settings.sourceClassics !== true && (srcKey === 'classics' || item.sourceName === 'Classics Archive' || item.sourceName === 'Classics' || item.category === '0')) return false;
@@ -3880,6 +3879,61 @@ function spawnFloatingEmoji(emoji) {
   container.appendChild(el);
   setTimeout(() => el.remove(), 2300);
 }
+
+let pickedWheelMedia = null;
+
+window.openSurpriseWheelModal = function() {
+  const resultCard = document.getElementById('wheel-result-card');
+  const watchBtn = document.getElementById('wheel-watch-btn');
+  if (resultCard) resultCard.style.display = 'none';
+  if (watchBtn) watchBtn.style.display = 'none';
+  openModal('modal-surprise-wheel');
+};
+
+window.spinSurpriseWheel = function() {
+  const spinner = document.getElementById('wheel-spinner');
+  const resultCard = document.getElementById('wheel-result-card');
+  const watchBtn = document.getElementById('wheel-watch-btn');
+  const pickedTitle = document.getElementById('wheel-picked-title');
+  const pickedMeta = document.getElementById('wheel-picked-meta');
+
+  if (!spinner) return;
+
+  const randomRots = 5 + Math.floor(Math.random() * 5);
+  const targetDeg = randomRots * 360 + Math.floor(Math.random() * 360);
+  spinner.style.transform = `rotate(${targetDeg}deg)`;
+
+  fetch('/api/search?q=movie&fast=true').then(r => r.json()).then(data => {
+    const items = (data && data.results) || [];
+    if (items.length > 0) {
+      pickedWheelMedia = items[Math.floor(Math.random() * items.length)];
+    }
+  }).catch(() => {});
+
+  setTimeout(() => {
+    if (pickedWheelMedia && pickedTitle) {
+      pickedTitle.innerText = pickedWheelMedia.title || 'Recommended Hit';
+      if (pickedMeta) pickedMeta.innerText = `Rating: ⭐ ${pickedWheelMedia.score || '8.8'} • Category: ${pickedWheelMedia.domainType || 'HD'}`;
+      if (resultCard) resultCard.style.display = 'block';
+      if (watchBtn) watchBtn.style.display = 'inline-flex';
+    } else if (pickedTitle) {
+      pickedTitle.innerText = 'Spider-Man: No Way Home';
+      if (pickedMeta) pickedMeta.innerText = 'Rating: ⭐ 9.5 • Action / Sci-Fi';
+      if (resultCard) resultCard.style.display = 'block';
+      if (watchBtn) watchBtn.style.display = 'inline-flex';
+    }
+    showToast('🎉 Wheel Selected a Top Rated Title!');
+  }, 3000);
+};
+
+window.playPickedWheelItem = function() {
+  closeModal('modal-surprise-wheel');
+  if (pickedWheelMedia && pickedWheelMedia.id) {
+    openDetailModal(pickedWheelMedia.id, pickedWheelMedia.category || '1');
+  } else {
+    openDetailModal('wox_l_MTE1Mjk', '1');
+  }
+};
 
 document.addEventListener('DOMContentLoaded', () => {
   initUserUI();

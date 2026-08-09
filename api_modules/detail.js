@@ -16,15 +16,6 @@ module.exports = async (req, res) => {
 
     const { provider, id } = unmaskId(rawId);
 
-    // Delegate Viva One / VivaMax / Viva MovieBox items directly to Viva handler
-    if (provider === 'vivaone' || provider === 'vivamax' || provider === 'vivamoviebox' || provider === 'vivamb' || String(rawId).startsWith('viva')) {
-      const vivaHandler = require('./viva');
-      req.query = req.query || {};
-      req.query.action = 'detail';
-      req.query.id = rawId;
-      return vivaHandler(req, res);
-    }
-
     // Delegate Narto Drama items directly to Narto handler
     if (provider === 'narto' || String(rawId).startsWith('narto_')) {
       const nartoHandler = require('./narto');
@@ -200,20 +191,7 @@ module.exports = async (req, res) => {
       { id: maskId('loklok', drama.id), sourceKey: 'loklok', sourceName: 'Server Alpha (HD)', isDefault: true }
     ];
 
-    try {
-      const { VIVA_CATALOG_ITEMS, VIVA_CONFIGS } = require('./viva');
-      if (Array.isArray(VIVA_CATALOG_ITEMS)) {
-        const matchedViva = VIVA_CATALOG_ITEMS.filter(v => v.title.toLowerCase().replace(/[^a-z0-9]/g, '') === normTitle);
-        matchedViva.forEach(v => {
-          const cfg = VIVA_CONFIGS[v.sourceKey] || { name: 'Viva' };
-          mirrors.push({
-            id: maskId(v.sourceKey, v.id),
-            sourceKey: v.sourceKey,
-            sourceName: cfg.name
-          });
-        });
-      }
-    } catch (_) {}
+
 
     return res.status(200).json({
       success: true,

@@ -208,10 +208,7 @@ const PROVIDER_PREFIXES = {
   classics: 'wox_c_',
   adult: 'wox_x_',
   hstream: 'wox_hs_',
-  hentaimama: 'wox_hm_',
-  vivaone: 'wox_vo_',
-  vivamax: 'wox_vm_',
-  vivamoviebox: 'wox_vb_'
+  hentaimama: 'wox_hm_'
 };
 
 // Reverse map: prefix -> provider
@@ -284,7 +281,7 @@ function cleanTitleForDeduplication(title) {
     .replace(/[（【]/g, '(')
     .replace(/[）】]/g, ')')
     // 2. Remove provider prefixes
-    .replace(/^\[(?:narto|loklok|viva|hollywood|classics|anime|adult)\]\s*/gi, '')
+    .replace(/^\[(?:narto|loklok|hollywood|classics|anime|adult)\]\s*/gi, '')
     // 3. Remove language/dub/sub/quality brackets
     .replace(/\s*\([^)]*(?:india|korea|japan|philippines|china|indonesia|thailand|vietnam|us|uk|dub|sub|uncensored|hd|4k|1080p|720p|english|bahasa)[^)]*\)/gi, '')
     // 4. Remove Season & Series suffixes
@@ -318,8 +315,8 @@ function robustDeduplicate(items) {
 
     const currentMirror = {
       id: item.id,
-      sourceKey: item.sourceKey || (item.isNarto ? 'narto' : (item.isViva ? 'viva' : 'loklok')),
-      sourceName: item.sourceName || (item.isNarto ? 'Narto Drama' : (item.isViva ? 'Viva' : 'Loklok HD')),
+      sourceKey: item.sourceKey || (item.isNarto ? 'narto' : 'loklok'),
+      sourceName: item.sourceName || (item.isNarto ? 'Narto Drama' : 'Loklok HD'),
       category: item.category
     };
 

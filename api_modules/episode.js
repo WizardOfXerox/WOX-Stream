@@ -31,17 +31,6 @@ module.exports = async (req, res) => {
 
     const { provider, id: contentId } = unmaskId(rawContentId);
 
-    // Delegate Viva One / VivaMax / Viva MovieBox episode requests to Viva handler
-    if (provider === 'vivaone' || provider === 'vivamax' || provider === 'vivamoviebox' || provider === 'vivamb' || String(rawContentId).startsWith('viva')) {
-      const vivaHandler = require('./viva');
-      req.query = req.query || {};
-      req.query.action = 'episode';
-      req.query.id = rawContentId;
-      req.query.contentId = rawContentId;
-      req.query.episodeId = episodeId;
-      return vivaHandler(req, res);
-    }
-
     // Delegate Hstream episode stream requests
     if (provider === 'hstream') {
       const hstreamModule = require('./hstream');

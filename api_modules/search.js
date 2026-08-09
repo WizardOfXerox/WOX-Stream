@@ -146,8 +146,8 @@ function deduplicateResults(items) {
     if (!norm) return;
     const currentMirror = {
       id: item.id,
-      sourceKey: item.sourceKey || (item.isNarto ? 'narto' : (item.isViva ? 'viva' : 'loklok')),
-      sourceName: item.sourceName || (item.isNarto ? 'Narto Drama' : (item.isViva ? 'Viva' : 'Loklok HD')),
+      sourceKey: item.sourceKey || (item.isNarto ? 'narto' : 'loklok'),
+      sourceName: item.sourceName || (item.isNarto ? 'Narto Drama' : 'Loklok HD'),
       category: item.category
     };
 
@@ -413,25 +413,7 @@ async function searchHandler(req, res) {
         }
       } catch (_) {}
 
-      // Append matched Viva items
-      if (vivaItems.length > 0) {
-        vivaItems.forEach(vItem => {
-          const tLower = String(vItem.title || '').toLowerCase();
-          if (queryWords.length === 0 || queryWords.some(w => tLower.includes(w))) {
-            results.push({
-              id: vItem.id,
-              category: String(vItem.category || 1),
-              title: vItem.title,
-              cover: vItem.cover,
-              score: vItem.score || '9.0',
-              domainType: 'MOVIE',
-              sourceName: vItem.sourceName,
-              sourceKey: vItem.sourceKey,
-              isViva: true
-            });
-          }
-        });
-      }
+
 
       // Search Anime
       try {
@@ -541,40 +523,7 @@ async function searchHandler(req, res) {
       const pageSize = 48;
       const pageIdx = parseInt(page, 10) || 0;
 
-      if (reqSource === 'vivaone' || reqSource === 'vivamax' || reqSource === 'vivamb' || reqSource === 'viva moviebox') {
-        const sourceMap = { vivaone: 'vivaone', vivamax: 'vivamax', vivamb: 'vivamoviebox', 'viva moviebox': 'vivamoviebox' };
-        const targetSrc = sourceMap[reqSource] || reqSource;
-        const pageIdx = parseInt(page, 10) || 0;
-
-        let vivaCatalog = [];
-        try {
-          const vivaHandler = require('./viva');
-          const vivaReq = { query: { action: 'catalog', source: targetSrc } };
-          const vivaRes = {
-            status: function() { return this; },
-            json: function(data) { if (data && data.items) vivaCatalog = data.items; }
-          };
-          await vivaHandler(vivaReq, vivaRes);
-        } catch (_) {}
-
-        const startIndex = pageIdx * pageSize;
-        const pageSlice = vivaCatalog.slice(startIndex, startIndex + pageSize);
-
-        let results = pageSlice.map(vItem => ({
-          id: vItem.id,
-          category: String(vItem.category || 1),
-          title: vItem.title,
-          cover: vItem.cover,
-          score: vItem.score || '9.0',
-          domainType: 'MOVIE',
-          sourceName: vItem.sourceName,
-          sourceKey: vItem.sourceKey,
-          isViva: true
-        }));
-
-        let nextCursor = startIndex + pageSize < vivaCatalog.length ? `${reqSource}_page_${pageIdx + 1}` : '';
-        return res.status(200).json({ success: true, results, nextCursor });
-      } else if (reqSource === 'narto') {
+      if (reqSource === 'narto') {
         const pageIdx = parseInt(page, 10) || 0;
         const subTypeFilter = req.query.params || req.query.category || '';
         let nartoItems = [];
@@ -819,60 +768,21 @@ async function searchHandler(req, res) {
           })());
         }
 
-        // Priority 4: Viva (Filipino & Asian Blockbusters)
-        subTasks.push((async () => {
-          try {
-            const vivaModule = require('./viva');
-            let vItems = [];
-            const vivaReq = { query: { action: 'catalog', source: 'all' } };
-            const vivaRes = {
-              status: function() { return this; },
-              json: function(d) { if (d && d.items) vItems = d.items; }
-            };
-            await Promise.race([
-              vivaModule(vivaReq, vivaRes),
-              new Promise(r => setTimeout(() => r([]), 1500))
-            ]);
-            const vSlice = vItems.slice((page * 8) % Math.max(1, vItems.length - 8), ((page * 8) % Math.max(1, vItems.length - 8)) + 8);
-            return { type: 'viva', items: vSlice };
-          } catch (_) { return null; }
-        })());
-
-        // Priority 5: Adult Anime (if 18+ setting enabled)
-        if (allowAdultParam === 'true' && isGeneralCatalog) {
-          subTasks.push((async () => {
-            try {
-              const hstreamModule = require('./hstream');
-              const hmamaModule = require('./hentaimama');
-              const [hsItems, hmItems] = await Promise.all([
-                Promise.race([hstreamModule.fetchHstreamCatalog(page + 1, 'view-count', ''), new Promise(r => setTimeout(() => r([]), 1200))]),
-                Promise.race([hmamaModule.fetchHentaiMamaCatalog(page + 1, ''), new Promise(r => setTimeout(() => r([]), 1200))])
-              ]);
-              const resList = [];
-              if (hsItems && hsItems.length > 0) resList.push(...hsItems.slice(0, 12));
-              if (hmItems && hmItems.length > 0) resList.push(...hmItems.slice(0, 12));
-              return { type: 'adult', items: resList };
-            } catch (_) { return null; }
-          })());
-        }
-
         const settledSub = await Promise.allSettled(subTasks);
         settledSub.forEach(s => {
           if (s.status === 'fulfilled' && s.value) {
             if (s.value.type === 'narto') nartoItems = s.value.items;
             else if (s.value.type === 'hollywood') hollywoodItems = s.value.items;
-            else if (s.value.type === 'viva') vivaItems = s.value.items;
             else if (s.value.type === 'adult') adultItems = s.value.items;
           }
         });
       }
 
-      // Order of precedence: 1. Loklok HD -> 2. Narto Drama -> 3. Hollywood -> 4. Viva -> 5. Adult
+      // Order of precedence: 1. Loklok HD -> 2. Narto Drama -> 3. Hollywood -> 4. Adult
       let combinedResults = [
         ...loklokItems,
         ...nartoItems,
         ...hollywoodItems,
-        ...vivaItems,
         ...adultItems
       ];
 

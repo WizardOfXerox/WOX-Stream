@@ -123,6 +123,10 @@
         </div>
 
         <div class="top-controls">
+          <button class="btn btn-glass" onclick="openSurpriseWheelModal()" style="padding: 0.4rem 0.85rem; font-size: 0.85rem; font-weight: 700; color: #38bdf8; border-color: rgba(56,189,248,0.3); background: rgba(56,189,248,0.12);" title="Surprise Me! Randomizer Wheel">
+            🎲 Surprise Me!
+          </button>
+
           <button class="top-icon-btn" title="Watch History" onclick="switchNav('history')">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 16 14"/></svg>
           </button>
@@ -411,126 +415,68 @@
 
   <!-- Premium Plyr Video Player Modal -->
   <div class="modal-backdrop" id="modal-player" style="z-index: 999999;">
-    <div class="modal-container player-modal-container" style="position: relative; background: #000; overflow: hidden; display: flex; flex-direction: column;">
+    <div class="modal-container player-modal-container" style="position: relative; background: #000; overflow: hidden; display: flex; flex-direction: column; width: 100vw; height: 100vh; max-width: 100vw; border-radius: 0; border: none;">
       
-      <!-- Top Floating Control Header Bar -->
-      <div class="player-top-header" style="padding: 0.6rem 1rem; background: rgba(10, 11, 18, 0.95); border-bottom: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center; z-index: 20; gap: 0.75rem;">
-        <div style="display: flex; gap: 0.5rem; align-items: center; min-width: 0; flex-wrap: wrap;">
-          <button class="btn btn-glass" onclick="playPrevEpisode()" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(255,255,255,0.06); border-color: var(--border-glass); color: #fff;">⏮ Prev</button>
-          <button class="btn btn-glass" onclick="playNextEpisode()" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(255,255,255,0.06); border-color: var(--border-glass); color: #fff;">Next ⏭</button>
-          
-          <!-- Audio Volume Booster Control -->
-          <div style="position: relative; display: inline-block;">
-            <button class="btn btn-glass" onclick="toggleVolBoostDropdown(event)" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(56,189,248,0.12); border-color: rgba(56,189,248,0.3); color: var(--accent-cyan); font-weight: 600;" title="Boost Audio Volume (Up to 400%)">
-              🔊 Boost: <span id="vol-boost-label">100%</span> ▾
-            </button>
-            <div id="vol-boost-dropdown" style="display: none; position: absolute; top: 115%; left: 0; background: #0f121d; border: 1px solid var(--border-glass); border-radius: 8px; padding: 0.4rem; z-index: 999; min-width: 140px; box-shadow: 0 12px 30px rgba(0,0,0,0.95);">
-              <div onclick="setVolumeBoost(1.0)" style="padding: 0.45rem 0.75rem; cursor: pointer; color: #fff; font-size: 0.85rem; border-radius: 4px; display: flex; justify-content: space-between;" onmouseover="this.style.background='rgba(56,189,248,0.2)'" onmouseout="this.style.background='transparent'">
-                <span>100%</span><span style="color: var(--text-muted);">Standard</span>
-              </div>
-              <div onclick="setVolumeBoost(1.5)" style="padding: 0.45rem 0.75rem; cursor: pointer; color: #fff; font-size: 0.85rem; border-radius: 4px; display: flex; justify-content: space-between;" onmouseover="this.style.background='rgba(56,189,248,0.2)'" onmouseout="this.style.background='transparent'">
-                <span>150%</span><span style="color: #38bdf8;">+50%</span>
-              </div>
-              <div onclick="setVolumeBoost(2.0)" style="padding: 0.45rem 0.75rem; cursor: pointer; color: #fff; font-size: 0.85rem; border-radius: 4px; display: flex; justify-content: space-between;" onmouseover="this.style.background='rgba(56,189,248,0.2)'" onmouseout="this.style.background='transparent'">
-                <span>200%</span><span style="color: #c084fc;">Double</span>
-              </div>
-              <div onclick="setVolumeBoost(4.0)" style="padding: 0.45rem 0.75rem; cursor: pointer; color: #f87171; font-weight: 700; font-size: 0.85rem; border-radius: 4px; display: flex; justify-content: space-between;" onmouseover="this.style.background='rgba(239,68,68,0.2)'" onmouseout="this.style.background='transparent'">
-                <span>⚡ 400%</span><span>MAX</span>
+      <div class="plyr-wrapper" id="player-container" style="width: 100%; height: 100%; position: relative;">
+        <!-- Top Floating Overlay Header (Auto-hides) -->
+        <div id="player-floating-header" style="position: absolute; top: 0; left: 0; right: 0; padding: 1.2rem 1.5rem; background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%); display: flex; justify-content: space-between; align-items: center; z-index: 99; transition: opacity 0.3s ease; pointer-events: auto;">
+          <div style="display: flex; align-items: center; gap: 0.75rem; min-width: 0;">
+            <button onclick="closePlayerModal()" style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; cursor: pointer; backdrop-filter: blur(8px); transition: all 0.2s;" title="Close Video Player (Esc)">✕</button>
+            <span id="player-title-text" style="font-size: 1.05rem; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 8px rgba(0,0,0,0.9);"></span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <!-- Mirror Server Selector Badge -->
+            <div id="player-mirror-btn-wrap" style="position: relative; display: none;">
+              <button class="btn btn-glass" onclick="toggleMirrorDropdown(event)" style="padding: 0.35rem 0.75rem; font-size: 0.82rem; background: rgba(34,197,94,0.2); border-color: rgba(34,197,94,0.4); color: #4ade80; font-weight: 600;" title="Switch Video Stream Mirror">
+                🌐 Mirror: <span id="current-mirror-label">Loklok HD</span> ▾
+              </button>
+              <div id="player-mirror-dropdown" style="display: none; position: absolute; top: 115%; right: 0; background: #0f121d; border: 1px solid var(--border-glass); border-radius: 8px; padding: 0.4rem; z-index: 999; min-width: 175px; box-shadow: 0 12px 30px rgba(0,0,0,0.95);">
               </div>
             </div>
           </div>
-
-          <!-- Player Live Subtitle Customizer Popover Button -->
-          <div style="position: relative; display: inline-block;">
-            <button class="btn btn-glass" onclick="togglePlayerSubPanel(event)" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(147,51,234,0.15); border-color: rgba(147,51,234,0.3); color: #c084fc; font-weight: 600;" title="Customize Subtitle Appearance">
-              🔤 Subtitle Style ⚙️
-            </button>
-            
-            <div id="player-sub-popover" style="display: none; position: absolute; top: 115%; left: 0; background: #0f121d; border: 1px solid var(--border-glass); border-radius: 12px; padding: 1.25rem; z-index: 999; width: 300px; box-shadow: 0 16px 40px rgba(0,0,0,0.95);">
-              <h4 style="font-size: 0.95rem; font-weight: 700; color: #fff; margin-bottom: 1rem; border-bottom: 1px solid var(--border-glass); padding-bottom: 0.5rem;">🔤 Subtitle Appearance</h4>
-              
-              <div style="margin-bottom: 0.85rem;">
-                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem;">
-                  <span>Position Height</span>
-                  <span id="player-sub-pos-val" style="color: #c084fc; font-weight: 600;">12%</span>
-                </div>
-                <input type="range" id="player-sub-bottom" min="2" max="40" value="12" step="1" style="width: 100%; accent-color: #9333ea; cursor: pointer;" oninput="updateSubtitleSetting('bottom', this.value + '%')">
-              </div>
-
-              <div style="margin-bottom: 0.85rem;">
-                <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.3rem;">Font Size</label>
-                <select id="player-sub-size" onchange="updateSubtitleSetting('fontSize', this.value)" style="width: 100%; padding: 0.45rem; background: #1e293b; border: 1px solid var(--border-glass); color: #fff; border-radius: 6px; font-size: 0.85rem;">
-                  <option value="16px">16px (Small)</option>
-                  <option value="24px" selected>24px (Normal)</option>
-                  <option value="30px">30px (Large)</option>
-                  <option value="36px">36px (Extra Large)</option>
-                  <option value="42px">42px (Huge)</option>
-                </select>
-              </div>
-
-              <div style="margin-bottom: 0.85rem;">
-                <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 0.3rem;">Color & Style Preset</label>
-                <select id="player-sub-style" style="width: 100%; padding: 0.45rem; background: #1e293b; border: 1px solid var(--border-glass); color: #fff; border-radius: 6px; font-size: 0.85rem; outline: none; cursor: pointer;" onchange="updateSubtitleSetting('stylePreset', this.value)">
-                  <option value="white" selected>⚪ Classic White</option>
-                  <option value="yellow">🟡 Vibrant Yellow</option>
-                  <option value="cyan">🟢 Neon Cyan</option>
-                  <option value="box">⬛ Black Background Box</option>
-                  <option value="purple">🌌 Purple Glow</option>
-                </select>
-              </div>
-
-              <div>
-                <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 0.3rem;">Font Family</label>
-                <select id="player-sub-font" style="width: 100%; padding: 0.45rem; background: #1e293b; border: 1px solid var(--border-glass); color: #fff; border-radius: 6px; font-size: 0.85rem; outline: none; cursor: pointer;" onchange="updateSubtitleSetting('fontFamily', this.value)">
-                  <option value="Inter, sans-serif" selected>Sans-Serif (Modern)</option>
-                  <option value="Georgia, serif">Serif (Classic)</option>
-                  <option value="'Courier New', monospace">Monospace (Code)</option>
-                  <option value="cursive">Cursive (Script)</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <!-- Playback Speed Control -->
-          <div style="position: relative; display: inline-block;">
-            <button class="btn btn-glass" onclick="toggleSpeedDropdown(event)" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(251,146,60,0.12); border-color: rgba(251,146,60,0.3); color: #fb923c; font-weight: 600;" title="Playback Speed">
-              ⚡ <span id="speed-label">1.0x</span> ▾
-            </button>
-            <div id="speed-dropdown" style="display: none; position: absolute; top: 115%; left: 0; background: #0f121d; border: 1px solid var(--border-glass); border-radius: 8px; padding: 0.4rem; z-index: 999; min-width: 130px; box-shadow: 0 12px 30px rgba(0,0,0,0.95);">
-              <div onclick="setPlaybackSpeed(0.5)" style="padding: 0.4rem 0.75rem; cursor: pointer; color: #fff; font-size: 0.85rem; border-radius: 4px;" onmouseover="this.style.background='rgba(251,146,60,0.2)'" onmouseout="this.style.background='transparent'">0.5x Slow</div>
-              <div onclick="setPlaybackSpeed(0.75)" style="padding: 0.4rem 0.75rem; cursor: pointer; color: #fff; font-size: 0.85rem; border-radius: 4px;" onmouseover="this.style.background='rgba(251,146,60,0.2)'" onmouseout="this.style.background='transparent'">0.75x</div>
-              <div onclick="setPlaybackSpeed(1.0)" style="padding: 0.4rem 0.75rem; cursor: pointer; color: #38bdf8; font-size: 0.85rem; font-weight: 700; border-radius: 4px;" onmouseover="this.style.background='rgba(251,146,60,0.2)'" onmouseout="this.style.background='transparent'">1.0x Normal</div>
-              <div onclick="setPlaybackSpeed(1.25)" style="padding: 0.4rem 0.75rem; cursor: pointer; color: #fff; font-size: 0.85rem; border-radius: 4px;" onmouseover="this.style.background='rgba(251,146,60,0.2)'" onmouseout="this.style.background='transparent'">1.25x</div>
-              <div onclick="setPlaybackSpeed(1.5)" style="padding: 0.4rem 0.75rem; cursor: pointer; color: #fff; font-size: 0.85rem; border-radius: 4px;" onmouseover="this.style.background='rgba(251,146,60,0.2)'" onmouseout="this.style.background='transparent'">1.5x</div>
-              <div onclick="setPlaybackSpeed(2.0)" style="padding: 0.4rem 0.75rem; cursor: pointer; color: #f87171; font-weight: 700; font-size: 0.85rem; border-radius: 4px;" onmouseover="this.style.background='rgba(239,68,68,0.2)'" onmouseout="this.style.background='transparent'">2.0x Fast</div>
-            </div>
-          </div>
-
-          <!-- Picture-in-Picture Button -->
-          <button class="btn btn-glass" onclick="togglePiP()" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(167,139,250,0.12); border-color: rgba(167,139,250,0.3); color: #a78bfa; font-weight: 600;" title="Picture-in-Picture Mode">📌 PiP</button>
-
-          <button class="btn btn-glass" onclick="skipVideoIntro()" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(236,72,153,0.15); border-color: rgba(236,72,153,0.3); color: #f472b6; font-weight: 600;" title="Skip Video Opening Theme (+85s)">⏭ Skip Intro</button>
-          
-          <button id="autonext-btn" class="btn btn-glass" onclick="toggleAutoNext()" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.3); color: #4ade80; font-weight: 600;" title="Toggle Auto-Play Next Episode">Auto-Next: ON 🔄</button>
-
-          <!-- Stream Mirror Server Selector (Hidden by default, shown ONLY when real mirrors exist) -->
-          <div id="player-mirror-btn-wrap" style="position: relative; display: none;">
-            <button class="btn btn-glass" onclick="toggleMirrorDropdown(event)" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.3); color: #4ade80; font-weight: 600;" title="Switch Video Stream Mirror">
-              🌐 Mirror: <span id="current-mirror-label">Loklok HD</span> ▾
-            </button>
-            <div id="player-mirror-dropdown" style="display: none; position: absolute; top: 115%; right: 0; background: #0f121d; border: 1px solid var(--border-glass); border-radius: 8px; padding: 0.4rem; z-index: 999; min-width: 175px; box-shadow: 0 12px 30px rgba(0,0,0,0.95);">
-            </div>
-          </div>
-
-          <span id="player-title-text" style="font-size: 0.9rem; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: 0.5rem;"></span>
         </div>
-        <button class="modal-close" onclick="closePlayerModal()" style="position: relative; top: 0; right: 0; background: rgba(239, 68, 68, 0.9); border: 1px solid rgba(255,255,255,0.2); color: #fff; width: 34px; height: 34px; font-size: 1.2rem; font-weight: 700; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;" title="Close Video Player (Esc)">&times;</button>
-      </div>
 
-      <div class="plyr-wrapper" id="player-container" style="width: 100%; flex: 1; position: relative;">
         <!-- 2X Speed Boost Indicator Overlay -->
-        <div id="speed-boost-indicator" style="display: none; position: absolute; top: 1rem; left: 50%; transform: translateX(-50%); background: rgba(147, 51, 234, 0.9); color: #fff; padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.85rem; font-weight: 800; z-index: 9999; letter-spacing: 1px; box-shadow: 0 4px 15px rgba(147,51,234,0.6); border: 1px solid rgba(255,255,255,0.3);">
+        <div id="speed-boost-indicator" style="display: none; position: absolute; top: 4.5rem; left: 50%; transform: translateX(-50%); background: rgba(147, 51, 234, 0.9); color: #fff; padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.85rem; font-weight: 800; z-index: 9999; letter-spacing: 1px; box-shadow: 0 4px 15px rgba(147,51,234,0.6); border: 1px solid rgba(255,255,255,0.3);">
           ⏩ 2.0X FAST FORWARDING
+        </div>
+
+        <!-- Audio Booster Node Indicator Overlay -->
+        <div id="boost-indicator" style="display: none; position: absolute; top: 4.5rem; right: 2rem; background: rgba(56, 189, 248, 0.9); color: #000; padding: 0.3rem 0.8rem; border-radius: 12px; font-size: 0.8rem; font-weight: 800; z-index: 9999; box-shadow: 0 4px 15px rgba(56,189,248,0.5);">
+          🔊 AUDIO BOOST: <span id="boost-val-text">100%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Surprise Me! AI Spin Wheel Modal -->
+  <div class="modal-backdrop" id="modal-surprise-wheel" style="z-index: 10005;">
+    <div class="modal-container" style="max-width: 480px; text-align: center;">
+      <button class="modal-close" onclick="closeModal('modal-surprise-wheel')">&times;</button>
+      <div style="padding: 2rem;">
+        <h3 style="font-size: 1.4rem; font-weight: 800; color: #fff; margin-bottom: 0.4rem; background: linear-gradient(135deg, #38bdf8, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">🎲 SURPRISE ME!</h3>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">Can't decide what to watch? Let the Cyberpunk Wheel pick your next binge!</p>
+        
+        <div id="wheel-container" style="position: relative; width: 240px; height: 240px; margin: 0 auto 1.5rem auto; border-radius: 50%; border: 4px solid var(--accent-cyan); box-shadow: 0 0 30px rgba(0,255,255,0.4); overflow: hidden; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, #1e1b4b 0%, #090a0f 100%);">
+          <div id="wheel-spinner" style="width: 100%; height: 100%; transition: transform 3s cubic-bezier(0.15, 0.85, 0.35, 1.05); display: flex; align-items: center; justify-content: center;">
+            <div style="font-size: 3rem;">🎬 🍿 ⚡ 🔮 💥 🎭</div>
+          </div>
+          <div style="position: absolute; top: -10px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 12px solid transparent; border-right: 12px solid transparent; border-top: 20px solid #ef4444; z-index: 10;"></div>
+        </div>
+
+        <div id="wheel-result-card" style="display: none; background: rgba(255,255,255,0.04); border: 1px solid var(--border-glass); border-radius: 12px; padding: 1rem; margin-bottom: 1.25rem;">
+          <h4 id="wheel-picked-title" style="font-size: 1.1rem; font-weight: 700; color: #fff; margin-bottom: 0.3rem;"></h4>
+          <p id="wheel-picked-meta" style="font-size: 0.8rem; color: var(--accent-cyan);"></p>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; justify-content: center;">
+          <button class="btn btn-primary" onclick="spinSurpriseWheel()" style="padding: 0.7rem 1.8rem; font-size: 0.95rem; background: linear-gradient(135deg, #0284c7, #9333ea);">
+            🔄 Spin the Wheel
+          </button>
+          <button id="wheel-watch-btn" class="btn btn-glass" onclick="playPickedWheelItem()" style="display: none; padding: 0.7rem 1.4rem; font-size: 0.95rem; color: #4ade80; border-color: rgba(74,222,128,0.4);">
+            ▶ Watch Now
+          </button>
         </div>
       </div>
     </div>
@@ -757,13 +703,7 @@
               </label>
             </div>
 
-            <div class="setting-item">
-              <span>Enable Viva (Filipino & Asian)</span>
-              <label class="switch">
-                <input type="checkbox" id="setting-source-viva" checked onchange="toggleSetting('sourceViva', this.checked)">
-                <span class="slider"></span>
-              </label>
-            </div>
+
 
             <div class="setting-item">
               <span>Enable Anime & Asian Dramas</span>

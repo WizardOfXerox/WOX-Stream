@@ -97,11 +97,6 @@ const server = http.createServer(async (req, res) => {
     return streamPartyHandler(req, res);
   }
 
-  // Viva Platforms API Routes
-  if (pathname === '/api/viva' || pathname.startsWith('/api/viva')) {
-    const vivaHandler = require('./api_modules/viva');
-    return vivaHandler(req, res);
-  }
 
   // Narto Drama API Routes
   if (pathname.startsWith('/api/narto')) {
