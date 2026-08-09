@@ -2,6 +2,14 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+if (fs.existsSync(path.join(__dirname, '.env'))) {
+  const envContent = fs.readFileSync(path.join(__dirname, '.env'), 'utf-8');
+  envContent.split('\n').forEach(line => {
+    const match = line.match(/^\s*([\w.-]+)\s*=\s*["']?(.*?)["']?\s*$/);
+    if (match) process.env[match[1]] = match[2];
+  });
+}
+
 const homeHandler = require('./api_modules/home');
 const searchHandler = require('./api_modules/search');
 const detailHandler = require('./api_modules/detail');
