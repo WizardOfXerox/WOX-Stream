@@ -2908,6 +2908,7 @@ const FILTER_SCHEMAS = {
 };
 
 function renderDynamicFiltersForSource(sourceKey) {
+  state.filters.sourceFilter = sourceKey || '';
   const schemaKey = (!sourceKey || sourceKey === 'loklok') ? 'default' : sourceKey;
   const schema = FILTER_SCHEMAS[schemaKey] || FILTER_SCHEMAS.default;
 
@@ -2943,6 +2944,11 @@ function renderDynamicFiltersForSource(sourceKey) {
 }
 
 function initFilterPillListeners() {
+  setupPillGroup('pills-source', val => {
+    state.filters.sourceFilter = val;
+    renderDynamicFiltersForSource(val);
+    executeCategorySearch(true);
+  });
   setupPillGroup('pills-type', val => { state.filters.params = val; executeCategorySearch(true); });
   setupPillGroup('pills-region', val => { state.filters.area = val; executeCategorySearch(true); });
   setupPillGroup('pills-genre', val => { state.filters.category = val; executeCategorySearch(true); });
@@ -3307,7 +3313,7 @@ function filterContentBySettings(items) {
     if (state.settings.sourceNarto === false && (item.isNarto || srcKey === 'narto')) return false;
     if (state.settings.sourceHollywood === false && (srcKey === 'hollywood' || srcKey === 'flixhq')) return false;
     if (state.settings.sourceAnime === false && (srcKey === 'anime' || srcKey === 'drama')) return false;
-    if (state.settings.sourceClassics !== true && (srcKey === 'classics' || item.sourceName === 'Classics Archive' || item.sourceName === 'Classics' || item.category === '0')) return false;
+    if (state.settings.sourceClassics !== true && (srcKey === 'classics' || item.sourceName === 'Classics Archive' || item.sourceName === 'Classics')) return false;
 
     return true;
   });
@@ -3538,6 +3544,7 @@ function initMovieLinkRouter() {
   const playId = urlParams.get('play') || urlParams.get('id');
   const cat = urlParams.get('cat') || urlParams.get('category') || 1;
   const targetView = urlParams.get('view');
+  const urlSourceVal = urlParams.get('source');
   const urlParamsVal = urlParams.get('params');
   const urlAreaVal = urlParams.get('area');
   const urlCategoryVal = urlParams.get('category');
@@ -3546,6 +3553,10 @@ function initMovieLinkRouter() {
 
   if (targetView && ['category', 'history', 'calendar', 'search', 'watchlist', 'home'].includes(targetView)) {
     if (targetView === 'category') {
+      if (urlSourceVal !== null) {
+        state.filters.sourceFilter = urlSourceVal;
+        updatePillState('pills-source', urlSourceVal);
+      }
       if (urlParamsVal !== null) {
         state.filters.params = urlParamsVal;
         updatePillState('pills-type', urlParamsVal);
