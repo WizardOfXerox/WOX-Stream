@@ -2934,7 +2934,7 @@ function initInfiniteScrollObserver() {
         executeCategorySearch(false);
       }
     }
-  }, { rootMargin: '600px 0px' });
+  }, { rootMargin: '1200px 0px' });
 
   categoryInfiniteObserver.observe(sentinel);
 
@@ -2942,7 +2942,7 @@ function initInfiniteScrollObserver() {
   window.addEventListener('scroll', () => {
     if (state.activeNav !== 'category' || state.filters.loadingMore || !state.filters.hasMore) return;
     const scrollPosition = window.innerHeight + window.scrollY;
-    const threshold = document.documentElement.offsetHeight - 800;
+    const threshold = document.documentElement.offsetHeight - 1200;
     if (scrollPosition >= threshold) {
       executeCategorySearch(false);
     }

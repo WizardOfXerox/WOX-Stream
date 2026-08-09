@@ -538,7 +538,7 @@ module.exports = async (req, res) => {
     } else {
       // Category multi-filter search API
       const reqSource = (req.query.source || (req.body && req.body.source) || '').toLowerCase();
-      const pageSize = 12;
+      const pageSize = 48;
       const pageIdx = parseInt(page, 10) || 0;
 
       if (reqSource === 'vivaone' || reqSource === 'vivamax' || reqSource === 'vivamb' || reqSource === 'viva moviebox') {
@@ -694,7 +694,7 @@ module.exports = async (req, res) => {
       const sortCursor = req.query.sort || (req.body && req.body.sort) || '';
 
       const payload = {
-        size: 30,
+        size: 60,
         params: params,
         area: area,
         category: category,
