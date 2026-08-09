@@ -166,17 +166,17 @@ function updatePageTitleAndUrl(media, epName = null) {
   if (!media || !media.title) return;
   const titleSlug = slugifyTitle(media.title);
   const epText = epName ? `Playing ${epName} - ` : '';
-  document.title = `${epText}${media.title} | WOX-Stream`;
+  document.title = `${epText}${media.title} - WOX-Stream`;
 
-  const targetQuery = `?play=${encodeURIComponent(media.id)}&cat=${encodeURIComponent(media.category || 1)}&title=${titleSlug}`;
+  const targetQuery = `?id=${encodeURIComponent(media.id)}&cat=${encodeURIComponent(media.category || 1)}&title=${titleSlug}`;
   if (window.location.search !== targetQuery) {
     history.pushState({ modalOpen: true, id: media.id, category: media.category }, '', window.location.pathname + targetQuery);
   }
 }
 
 function resetPageTitleAndUrl() {
-  document.title = 'WOX-STREAM // VOID CINEMA';
-  if (window.location.search && window.location.search.includes('play=')) {
+  document.title = 'WOX-Stream';
+  if (window.location.search && (window.location.search.includes('play=') || window.location.search.includes('id='))) {
     history.pushState({}, '', window.location.pathname);
   }
 }
