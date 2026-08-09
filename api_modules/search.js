@@ -167,51 +167,62 @@ function deduplicateResults(items) {
   return Array.from(map.values());
 }
 
-const GENRE_MAP = {
-  '10': 'romance',
-  '1': 'action',
-  '13': 'fantasy',
-  '23': 'animation',
-  '16': 'suspense',
-  '19': 'sci-fi',
-  '5': 'horror',
-  '6': 'comedy',
-  '2': 'crime',
-  '3': 'adventure',
-  '9': 'thriller',
-  '64': 'lgbtq',
-  '8': 'drama',
-  '24': 'variety',
-  '63': 'family',
-  '65': 'musical',
-  '14': 'war',
-  '7': 'catastrophe',
-  '25': 'documentary',
-  '20': 'other'
+const REGION_CONFIG = {
+  '61': { name: 'America', terms: ['us', 'usa', 'america', 'american', 'hollywood', 'western', 'united states'], query: 'hollywood' },
+  '53': { name: 'Korea', terms: ['korea', 'korean', 'k-drama', 'kdrama', 'seoul', 'south korea'], query: 'korean drama' },
+  '60': { name: 'U.K', terms: ['uk', 'u.k', 'british', 'england', 'united kingdom', 'london', 'bbc'], query: 'british' },
+  '44': { name: 'Japan', terms: ['japan', 'japanese', 'anime', 'tokyo', 'manga'], query: 'japanese' },
+  '57': { name: 'Thailand', terms: ['thailand', 'thai', 'bangkok'], query: 'thai drama' },
+  '37': { name: 'Europe', terms: ['europe', 'european', 'france', 'french', 'germany', 'german', 'spain', 'spanish', 'italy', 'italian'], query: 'european' },
+  '37,60,58,50,54,55': { name: 'Europe', terms: ['europe', 'european', 'france', 'french', 'germany', 'german', 'spain', 'spanish', 'italy', 'italian', 'uk', 'british'], query: 'european' },
+  '32,56': { name: 'China', terms: ['china', 'chinese', 'c-drama', 'cdrama', 'taiwan', 'taiwanese', 'hong kong', 'cantonese', 'mandarin'], query: 'chinese drama' },
+  '41': { name: 'Indonesia', terms: ['indonesia', 'indonesian', 'jakarta'], query: 'indonesian' },
+  '34': { name: 'Philippines', terms: ['philippines', 'filipino', 'pinoy', 'tagalog', 'manila'], query: 'filipino' },
+  '40': { name: 'India', terms: ['india', 'indian', 'bollywood', 'hindi', 'tamil', 'telugu'], query: 'bollywood' },
+  '27': { name: 'Australia', terms: ['australia', 'australian', 'sydney'], query: 'australian' },
+  '26,28,29,30': { name: 'Other', terms: [], query: '' }
 };
 
-const AREA_KEYWORDS = {
-  '61': ['america', 'us', 'usa', 'hollywood', 'western', 'american', 'united states'],
-  '53': ['korea', 'korean', 'k-drama', 'seoul', 'south korea'],
-  '60': ['uk', 'u.k', 'british', 'england', 'united kingdom'],
-  '44': ['japan', 'japanese', 'anime', 'tokyo'],
-  '57': ['thailand', 'thai'],
-  '37,60,58,50,54,55': ['europe', 'european', 'france', 'germany', 'spain', 'italy', 'uk', 'french', 'spanish'],
-  '32,56': ['china', 'chinese', 'c-drama', 'hong kong', 'taiwan', 'mandarin'],
-  '41': ['indonesia', 'indonesian'],
-  '34': ['philippines', 'filipino', 'pinoy', 'tagalog'],
-  '40': ['india', 'indian', 'bollywood', 'hindi'],
-  '27': ['australia', 'australian']
+const GENRE_CONFIG = {
+  '10': { name: 'Romance', terms: ['romance', 'romantic', 'love', 'dating', 'marriage', 'lover', 'heart', 'affair', 'billionaire', 'crush', 'wedding', 'sweet', 'kiss'], query: 'romance' },
+  '1': { name: 'Action', terms: ['action', 'fight', 'battle', 'warrior', 'avengers', 'martial', 'kung fu', 'combat', 'gun', 'sniper', 'hero', 'superhero', 'mission'], query: 'action' },
+  '13': { name: 'Fantasy', terms: ['fantasy', 'magic', 'dragon', 'demon', 'reborn', 'god', 'immortal', 'fairy', 'witch', 'wizard', 'supernatural', 'curse', 'titan', 'jujutsu', 'slayer', 'myth'], query: 'fantasy' },
+  '23': { name: 'Animation', terms: ['animation', 'animated', 'anime', 'cartoon', 'comic', 'disney', 'pixar', 'manga'], query: 'animation' },
+  '16': { name: 'Suspense', terms: ['suspense', 'mystery', 'detective', 'secret', 'investigation', 'clue', 'puzzle', 'murder', 'killer', 'disappearance', 'truth'], query: 'suspense' },
+  '19': { name: 'Sci-Fi', terms: ['sci-fi', 'scifi', 'science fiction', 'space', 'alien', 'cyber', 'future', 'robot', 'galaxy', 'planet', 'universe', 'time travel', 'ai', 'matrix'], query: 'sci-fi' },
+  '5': { name: 'Horror', terms: ['horror', 'ghost', 'zombie', 'dead', 'evil', 'scary', 'haunted', 'demon', 'creepy', 'curse', 'monster', 'blood', 'fear'], query: 'horror' },
+  '6': { name: 'Comedy', terms: ['comedy', 'funny', 'hilarious', 'humor', 'joke', 'laugh', 'comic', 'parody', 'sitcom', 'fun'], query: 'comedy' },
+  '2': { name: 'Crime', terms: ['crime', 'criminal', 'police', 'cop', 'mafia', 'boss', 'gangster', 'detective', 'prison', 'jail', 'heist', 'robbery', 'underworld', 'drug'], query: 'crime' },
+  '3': { name: 'Adventure', terms: ['adventure', 'quest', 'journey', 'treasure', 'explore', 'island', 'jungle', 'expedition', 'survive', 'wilderness'], query: 'adventure' },
+  '9': { name: 'Thriller', terms: ['thriller', 'stalker', 'escape', 'trap', 'hostage', 'danger', 'chase', 'dark', 'tension', 'twisted', 'psychological'], query: 'thriller' },
+  '64': { name: 'LGBTQ', terms: ['lgbtq', 'lgbt', 'queer', 'gay', 'lesbian', 'bl', 'gl', 'boys love', 'girls love', 'rainbow'], query: 'lgbtq' },
+  '8': { name: 'Drama', terms: ['drama', 'family', 'life', 'story', 'emotional', 'tear', 'society', 'conflict', 'destiny'], query: 'drama' },
+  '24': { name: 'Variety Show', terms: ['variety', 'show', 'game', 'idol', 'reality', 'challenge', 'running man'], query: 'variety' },
+  '63': { name: 'Family', terms: ['family', 'kids', 'children', 'parent', 'mother', 'father', 'home'], query: 'family' },
+  '65': { name: 'Musical', terms: ['musical', 'music', 'song', 'sing', 'dance', 'band', 'concert'], query: 'musical' },
+  '14': { name: 'War', terms: ['war', 'battle', 'soldier', 'military', 'army', 'wwii', 'combat', 'conflict'], query: 'war' },
+  '7': { name: 'Catastrophe', terms: ['catastrophe', 'disaster', 'earthquake', 'tsunami', 'virus', 'pandemic', 'apocalypse', 'flood'], query: 'disaster' },
+  '25': { name: 'Documentary', terms: ['documentary', 'history', 'nature', 'biography', 'wildlife', 'true story'], query: 'documentary' },
+  '20': { name: 'Other', terms: [], query: '' }
 };
 
-function filterAndSortCategoryResults(results, { params = '', area = '', category = '', order = 'count' }) {
+const GENRE_MAP = Object.fromEntries(Object.entries(GENRE_CONFIG).map(([k, v]) => [k, v.query || v.name.toLowerCase()]));
+const AREA_KEYWORDS = Object.fromEntries(Object.entries(REGION_CONFIG).map(([k, v]) => [k, v.terms]));
+
+function filterAndSortCategoryResults(results, { params = '', area = '', category = '', order = 'count', source = '' }) {
   if (!Array.isArray(results) || results.length === 0) return [];
 
-  const targetGenre = (GENRE_MAP[category] || category || '').toLowerCase().trim();
-  const areaKeys = AREA_KEYWORDS[area] || (area ? [area.toLowerCase().trim()] : []);
+  const genreInfo = GENRE_CONFIG[category] || (category ? { name: category, terms: [category.toLowerCase()] } : null);
+  const regionInfo = REGION_CONFIG[area] || (area ? { name: area, terms: [area.toLowerCase()] } : null);
+
+  const isMovieFilter = params.includes('MOVIE') && !params.includes('TV');
+  const isTvFilter = params.includes('TV') && !params.includes('MOVIE');
+  const isAnimeFilter = params === 'COMIC' || params === 'ANIME';
+  const isShortsFilter = params.includes('MINISERIES');
+  const isDocFilter = params.includes('DOCUMENTARY');
 
   let filtered = results.filter(item => {
-    if (!item) return false;
+    if (!item || !item.id) return false;
     const title = String(item.title || item.name || '').toLowerCase();
     const domain = String(item.domainType || '').toUpperCase();
     const itemCat = String(item.category || item.categoryName || '').toLowerCase();
@@ -221,63 +232,74 @@ function filterAndSortCategoryResults(results, { params = '', area = '', categor
     const desc = String(item.description || '').toLowerCase();
     const textBlob = `${title} ${tags} ${desc} ${itemCat} ${srcName} ${srcKey}`;
 
-    if (params) {
-      const isMovieFilter = params.includes('MOVIE') && !params.includes('TV');
-      const isTvFilter = params.includes('TV') && !params.includes('MOVIE');
-      const isAnimeFilter = params === 'COMIC' || params === 'ANIME';
-      const isShortsFilter = params.includes('MINISERIES');
+    // Source Filter
+    if (source && source !== 'all') {
+      const sLower = source.toLowerCase();
+      if (!srcKey.includes(sLower) && !srcName.includes(sLower)) return false;
+    }
 
+    // 1. Type Filter (params)
+    if (params) {
       if (isMovieFilter) {
         if (domain === 'TV' || domain === 'SETI' || domain === 'SHORT' || item.isNarto || srcName.includes('narto')) return false;
       } else if (isTvFilter) {
-        if (domain === 'MOVIE' && !title.includes('season') && !title.includes('episode')) return false;
+        if (domain === 'MOVIE' && !title.includes('season') && !title.includes('episode') && !title.includes('ep')) return false;
       } else if (isAnimeFilter) {
         if (domain !== 'COMIC' && domain !== 'ANIME' && !srcName.includes('anime') && !srcKey.includes('anime') && !textBlob.includes('anime') && !textBlob.includes('animation')) return false;
       } else if (isShortsFilter) {
         if (domain !== 'MINISERIES' && domain !== 'SHORT' && !item.isNarto && !srcName.includes('narto')) return false;
+      } else if (isDocFilter) {
+        if (domain !== 'DOCUMENTARY' && !textBlob.includes('documentary') && !textBlob.includes('history')) return false;
       }
     }
 
-    if (areaKeys.length > 0) {
-      const isAreaMatched = areaKeys.some(ak => 
-        textBlob.includes(ak) ||
-        (ak === 'korea' && (item.isNarto || srcKey === 'narto' || srcName.includes('narto'))) ||
-        (ak === 'america' && (srcKey === 'hollywood' || srcName.includes('hollywood') || (srcKey === 'loklok' && !textBlob.includes('korea') && !textBlob.includes('japan') && !textBlob.includes('china')))) ||
-        (ak === 'japan' && (srcKey === 'anime' || domain === 'COMIC' || domain === 'ANIME'))
-      );
-      if (!isAreaMatched) return false;
+    // 2. Region Filter (area)
+    if (regionInfo && regionInfo.terms.length > 0) {
+      const isMatched = regionInfo.terms.some(t => textBlob.includes(t)) ||
+        (area === '61' && (srcKey === 'hollywood' || srcName.includes('hollywood') || (srcKey === 'loklok' && !textBlob.includes('korea') && !textBlob.includes('japan') && !textBlob.includes('china') && !textBlob.includes('thai')))) ||
+        (area === '53' && (item.isNarto || srcKey === 'narto' || srcKey === 'drama' || textBlob.includes('korean'))) ||
+        (area === '44' && (srcKey === 'anime' || domain === 'COMIC' || domain === 'ANIME')) ||
+        (area === '32,56' && (item.isNarto || srcKey === 'narto' || srcKey === 'drama' || textBlob.includes('chinese') || textBlob.includes('taiwan') || textBlob.includes('china')));
+      
+      if (!isMatched) return false;
     }
 
-    if (targetGenre && targetGenre !== 'other') {
-      const isGenreMatched = textBlob.includes(targetGenre) ||
-        (targetGenre === 'romance' && (textBlob.includes('love') || textBlob.includes('romantic') || textBlob.includes('billionaire') || textBlob.includes('marriage'))) ||
-        (targetGenre === 'action' && (textBlob.includes('fight') || textBlob.includes('battle') || textBlob.includes('warrior') || textBlob.includes('avengers') || textBlob.includes('spider-man') || textBlob.includes('action'))) ||
-        (targetGenre === 'fantasy' && (textBlob.includes('magic') || textBlob.includes('dragon') || textBlob.includes('demon') || textBlob.includes('reborn') || textBlob.includes('god') || textBlob.includes('titan') || textBlob.includes('jujutsu') || textBlob.includes('slayer'))) ||
-        (targetGenre === 'sci-fi' && (textBlob.includes('scifi') || textBlob.includes('space') || textBlob.includes('alien') || textBlob.includes('cyber'))) ||
-        (targetGenre === 'horror' && (textBlob.includes('ghost') || textBlob.includes('zombie') || textBlob.includes('dead') || textBlob.includes('evil'))) ||
-        (targetGenre === 'comedy' && (textBlob.includes('funny') || textBlob.includes('hilarious') || textBlob.includes('humor'))) ||
-        (targetGenre === 'crime' && (textBlob.includes('police') || textBlob.includes('cop') || textBlob.includes('mafia') || textBlob.includes('boss') || textBlob.includes('detective')));
-
+    // 3. Genre Filter (category)
+    if (genreInfo && genreInfo.terms.length > 0) {
+      const isGenreMatched = genreInfo.terms.some(t => textBlob.includes(t));
       if (!isGenreMatched) return false;
     }
 
     return true;
   });
 
+  // Soft fallback: if strict combination yielded 0, return items matching Type and Genre
   if (filtered.length === 0 && results.length > 0) {
-    filtered = results.slice(0);
+    filtered = results.filter(item => {
+      const title = String(item.title || item.name || '').toLowerCase();
+      const domain = String(item.domainType || '').toUpperCase();
+      const textBlob = `${title} ${String(item.genres || '')} ${String(item.sourceName || '')}`.toLowerCase();
+
+      if (isMovieFilter && (domain === 'TV' || item.isNarto)) return false;
+      if (isTvFilter && domain === 'MOVIE') return false;
+      if (isAnimeFilter && domain !== 'COMIC' && domain !== 'ANIME' && !textBlob.includes('anime')) return false;
+      if (isShortsFilter && domain !== 'MINISERIES' && !item.isNarto) return false;
+
+      if (genreInfo && genreInfo.terms.length > 0) {
+        return genreInfo.terms.some(t => textBlob.includes(t));
+      }
+      return true;
+    });
+    if (filtered.length === 0) filtered = results.slice(0);
   }
 
+  // 4. Sort Order
   if (order === 'score') {
     filtered.sort((a, b) => parseFloat(b.score || '8.0') - parseFloat(a.score || '8.0'));
   } else if (order === 'up') {
     filtered.sort((a, b) => String(b.id || '').localeCompare(String(a.id || '')));
   } else {
-    filtered.sort((a, b) => {
-      const isAHigh = a.score ? parseFloat(a.score) : 8.0;
-      const isBHigh = b.score ? parseFloat(b.score) : 8.0;
-      return isBHigh - isAHigh;
-    });
+    filtered.sort((a, b) => parseFloat(b.score || '8.0') - parseFloat(a.score || '8.0'));
   }
 
   return filtered;
@@ -646,14 +668,14 @@ async function searchHandler(req, res) {
       const order = req.query.order || (req.body && req.body.order) || 'count';
       const sortCursor = req.query.sort || (req.body && req.body.sort) || '';
 
-      const filterOpts = { params: rawParams, area, category, order };
+      const filterOpts = { params: rawParams, area, category, order, source: reqSource };
 
       if (reqSource === 'narto') {
-        const subTypeFilter = rawParams || category || '';
+        const genreName = GENRE_MAP[category] || category || '';
         let nartoItems = [];
         try {
           const nartoFetch = require('./narto');
-          const nartoReq = { url: `/catalog`, query: { q: subTypeFilter } };
+          const nartoReq = { url: `/catalog`, query: { q: genreName } };
           const nartoRes = {
             status: function() { return this; },
             json: function(data) { if (data && data.items) nartoItems = data.items; }
@@ -686,7 +708,8 @@ async function searchHandler(req, res) {
           domainType: 'SHORT',
           sourceName: 'Narto Drama',
           sourceKey: 'narto',
-          isNarto: true
+          isNarto: true,
+          tags: ['shorts', 'short drama', 'china', 'korea', 'asian', 'romance', 'billionaire', 'revenge', genreName].filter(Boolean)
         }));
 
         mapped = filterAndSortCategoryResults(mapped, filterOpts);
@@ -699,7 +722,7 @@ async function searchHandler(req, res) {
         let hwItems = [];
         try {
           const hwModule = require('./hollywood');
-          const hwRes = await hwModule.fetchHollywoodShelves();
+          const hwRes = await hwModule.fetchHollywoodShelves(pageIdx + 1);
           const list = Array.isArray(hwRes) ? hwRes : (hwRes && hwRes.shelves ? hwRes.shelves : []);
           list.forEach(s => hwItems.push(...(s.items || [])));
         } catch (_) {}
@@ -725,6 +748,10 @@ async function searchHandler(req, res) {
           const list = Array.isArray(dramaRes) ? dramaRes : (dramaRes && dramaRes.shelves ? dramaRes.shelves : []);
           list.forEach(s => dramaItems.push(...(s.items || [])));
         } catch (_) {}
+        dramaItems = dramaItems.map(drItem => ({
+          ...drItem,
+          tags: ['drama', 'series', 'tv', 'korea', 'china', 'japan', 'asian', ...(Array.isArray(drItem.tags) ? drItem.tags : [])]
+        }));
         dramaItems = filterAndSortCategoryResults(dramaItems, filterOpts);
         return res.status(200).json({ success: true, results: dramaItems, nextCursor: '' });
 
@@ -758,16 +785,16 @@ async function searchHandler(req, res) {
         return res.status(200).json({ success: true, results: adultItems, nextCursor });
       }
 
-      // Default/All Sources Category Multi-Filter
+      // Default/All Sources or Loklok Category Multi-Filter
       let searchKwTerms = [];
       const genreName = GENRE_MAP[category] || category || '';
-      const areaKeywords = AREA_KEYWORDS[area] || [];
-      const areaName = areaKeywords[0] || '';
+      const regionEntry = REGION_CONFIG[area] || null;
+      const areaName = regionEntry ? (regionEntry.query || regionEntry.name.toLowerCase()) : '';
 
       let typeName = '';
       if (rawParams.includes('MOVIE')) typeName = 'movie';
       else if (rawParams.includes('COMIC')) typeName = 'anime';
-      else if (rawParams.includes('MINISERIES')) typeName = 'short';
+      else if (rawParams.includes('MINISERIES')) typeName = 'short drama';
       else if (rawParams.includes('TV')) typeName = 'series';
 
       if (areaName && genreName && typeName) searchKwTerms.push(`${areaName} ${genreName} ${typeName}`);
@@ -777,54 +804,75 @@ async function searchHandler(req, res) {
       if (genreName) searchKwTerms.push(genreName);
       if (areaName) searchKwTerms.push(areaName);
       if (typeName) searchKwTerms.push(typeName);
-      searchKwTerms.push('season', 'movie', '2025', 'love', 'action');
 
-      let rawResults = [];
-      for (const kwAttempt of [...new Set(searchKwTerms)]) {
-        if (!kwAttempt) continue;
+      const uniqueKws = [...new Set(searchKwTerms)].filter(Boolean).slice(0, 6);
+      if (uniqueKws.length === 0) uniqueKws.push('movie', 'series', 'drama');
+
+      const loklokPromises = uniqueKws.map(async kw => {
         try {
-          const h5Res = await h5ApiSearch(kwAttempt);
-          if (h5Res && h5Res.length > 0) {
-            rawResults.push(...h5Res);
+          const res = await h5ApiSearch(kw);
+          if (Array.isArray(res)) {
+            return res.map(item => ({
+              ...item,
+              searchKw: kw
+            }));
           }
-        } catch (_) {}
+          return [];
+        } catch (_) {
+          return [];
+        }
+      });
+      const loklokResultsSettled = await Promise.allSettled(loklokPromises);
+      
+      let rawResults = [];
+      loklokResultsSettled.forEach(r => {
+        if (r.status === 'fulfilled' && Array.isArray(r.value)) {
+          rawResults.push(...r.value);
+        }
+      });
+
+      let loklokItems = rawResults.map(item => {
+        const itemDomain = item.domainType === 0 ? 'MOVIE' : (item.domainType === 1 ? 'TV' : String(item.domainType || '1'));
+        return {
+          id: maskId('loklok', item.id),
+          category: String(item.category || itemDomain || '1'),
+          title: item.name || item.title || 'Untitled',
+          cover: fixCoverUrl(item.coverVerticalUrl || item.imageUrl || item.cover || ''),
+          score: item.score || null,
+          domainType: itemDomain,
+          sort: item.sort || '',
+          sourceName: 'Loklok HD',
+          sourceKey: 'loklok',
+          tags: [item.searchKw, genreName, areaName, typeName].filter(Boolean)
+        };
+      });
+
+      if (reqSource === 'loklok') {
+        const finalFiltered = filterAndSortCategoryResults(loklokItems, filterOpts);
+        return res.status(200).json({ success: true, results: finalFiltered, nextCursor: '' });
       }
 
-      let loklokItems = rawResults.map(item => ({
-        id: maskId('loklok', item.id),
-        category: String(item.category || item.domainType || '1'),
-        title: item.name || item.title || 'Untitled',
-        cover: fixCoverUrl(item.coverVerticalUrl || item.imageUrl || item.cover || ''),
-        score: item.score || null,
-        domainType: item.domainType,
-        sort: item.sort || '',
-        sourceName: 'Loklok HD',
-        sourceKey: 'loklok'
-      }));
-
+      // ALL SOURCES: query all auxiliary providers in parallel
       let nartoItems = [];
       let hollywoodItems = [];
       let animeItems = [];
       let dramaItems = [];
-      let adultItems = [];
-
-      const allowAdultParam = req.query.allowAdult || (req.headers ? req.headers.allowadult : '') || '';
 
       const subTasks = [];
       subTasks.push((async () => {
         try {
           const nartoFetch = require('./narto');
           let nItems = [];
-          const nartoReq = { url: `/catalog`, query: { q: genreName } };
+          const nartoReq = { url: `/catalog`, query: { q: genreName || 'romance' } };
           const nartoRes = {
             status: function() { return this; },
             json: function(d) { if (d && d.items) nItems = d.items; }
           };
           await Promise.race([
             nartoFetch(nartoReq, nartoRes),
-            new Promise(resolve => setTimeout(resolve, 1200))
+            new Promise(resolve => setTimeout(resolve, 1500))
           ]);
-          return { type: 'narto', items: nItems.slice(0, 20).map(nItem => ({
+          return { type: 'narto', items: nItems.slice(0, 30).map(nItem => ({
             id: maskId('narto', nItem.id),
             category: '1',
             title: String(nItem.title || '').replace(/^\[narto\]\s*/i, '').trim(),
@@ -833,7 +881,8 @@ async function searchHandler(req, res) {
             domainType: 'SHORT',
             sourceName: 'Narto Drama',
             sourceKey: 'narto',
-            isNarto: true
+            isNarto: true,
+            tags: ['shorts', 'short drama', 'china', 'korea', 'asian', 'romance', 'billionaire', 'revenge', genreName].filter(Boolean)
           })) };
         } catch (_) { return null; }
       })());
@@ -848,7 +897,10 @@ async function searchHandler(req, res) {
           const list = Array.isArray(hwRes) ? hwRes : (hwRes && hwRes.shelves ? hwRes.shelves : []);
           const items = [];
           list.forEach(s => items.push(...(s.items || [])));
-          return { type: 'hollywood', items: items.slice(0, 15) };
+          return { type: 'hollywood', items: items.slice(0, 30).map(hwItem => ({
+            ...hwItem,
+            tags: ['movie', 'america', 'hollywood', 'western', ...(Array.isArray(hwItem.tags) ? hwItem.tags : [])]
+          })) };
         } catch (_) { return null; }
       })());
 
@@ -862,7 +914,27 @@ async function searchHandler(req, res) {
           const list = Array.isArray(aniRes) ? aniRes : (aniRes && aniRes.shelves ? aniRes.shelves : []);
           const items = [];
           list.forEach(s => items.push(...(s.items || [])));
-          return { type: 'anime', items: items.slice(0, 15) };
+          return { type: 'anime', items: items.slice(0, 30).map(aniItem => ({
+            ...aniItem,
+            tags: ['anime', 'japan', 'animation', ...(Array.isArray(aniItem.tags) ? aniItem.tags : [])]
+          })) };
+        } catch (_) { return null; }
+      })());
+
+      subTasks.push((async () => {
+        try {
+          const dramaModule = require('./asian-drama');
+          const dramaRes = await Promise.race([
+            dramaModule.fetchDramaShelves(),
+            new Promise(r => setTimeout(() => r([]), 1500))
+          ]);
+          const list = Array.isArray(dramaRes) ? dramaRes : (dramaRes && dramaRes.shelves ? dramaRes.shelves : []);
+          const items = [];
+          list.forEach(s => items.push(...(s.items || [])));
+          return { type: 'drama', items: items.slice(0, 30).map(drItem => ({
+            ...drItem,
+            tags: ['drama', 'series', 'korea', 'china', 'japan', 'asian', ...(Array.isArray(drItem.tags) ? drItem.tags : [])]
+          })) };
         } catch (_) { return null; }
       })());
 
@@ -872,6 +944,7 @@ async function searchHandler(req, res) {
           if (s.value.type === 'narto') nartoItems = s.value.items;
           else if (s.value.type === 'hollywood') hollywoodItems = s.value.items;
           else if (s.value.type === 'anime') animeItems = s.value.items;
+          else if (s.value.type === 'drama') dramaItems = s.value.items;
         }
       });
 
@@ -879,7 +952,8 @@ async function searchHandler(req, res) {
         ...loklokItems,
         ...nartoItems,
         ...hollywoodItems,
-        ...animeItems
+        ...animeItems,
+        ...dramaItems
       ];
 
       const finalDeduped = robustDeduplicate(combinedResults);

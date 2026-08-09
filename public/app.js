@@ -2909,44 +2909,11 @@ const FILTER_SCHEMAS = {
 
 function renderDynamicFiltersForSource(sourceKey) {
   state.filters.sourceFilter = sourceKey || '';
-  const schemaKey = (!sourceKey || sourceKey === 'loklok') ? 'default' : sourceKey;
-  const schema = FILTER_SCHEMAS[schemaKey] || FILTER_SCHEMAS.default;
-
-  const renderRowPills = (id, items) => {
-    const group = document.getElementById(id);
-    if (!group) return;
-    if (!items || items.length === 0) {
-      group.parentElement.style.display = 'none';
-      return;
-    }
-    group.parentElement.style.display = 'block';
-    group.innerHTML = items.map((item, idx) => `
-      <span class="filter-pill ${idx === 0 ? 'active' : ''}" data-val="${item.val}">${item.label}</span>
-    `).join('');
-  };
-
-  renderRowPills('pills-type', schema.type);
-  renderRowPills('pills-region', schema.region);
-  renderRowPills('pills-genre', schema.genre);
-  renderRowPills('pills-sort', schema.sort);
-
-  // Reset state values
-  state.filters.params = schema.type ? schema.type[0].val : '';
-  state.filters.area = schema.region ? schema.region[0].val : '';
-  state.filters.category = schema.genre ? schema.genre[0].val : '';
-  state.filters.order = schema.sort ? schema.sort[0].val : '';
-
-  // Re-attach listeners only for the dynamic rows
-  setupPillGroup('pills-type', val => { state.filters.params = val; executeCategorySearch(true); });
-  setupPillGroup('pills-region', val => { state.filters.area = val; executeCategorySearch(true); });
-  setupPillGroup('pills-genre', val => { state.filters.category = val; executeCategorySearch(true); });
-  setupPillGroup('pills-sort', val => { state.filters.order = val; executeCategorySearch(true); });
 }
 
 function initFilterPillListeners() {
   setupPillGroup('pills-source', val => {
     state.filters.sourceFilter = val;
-    renderDynamicFiltersForSource(val);
     executeCategorySearch(true);
   });
   setupPillGroup('pills-type', val => { state.filters.params = val; executeCategorySearch(true); });
@@ -3056,27 +3023,7 @@ async function executeCategorySearch(isReset = true) {
     const data = await res.json();
 
     const rawResults = data.results || [];
-    // Apply source filter if selected
-    const sourceKey = (state.filters.sourceFilter || '').toLowerCase();
-    const sourceFiltered = sourceKey ? rawResults.filter(item => {
-      const itemSrcKey = String(item.sourceKey || '').toLowerCase();
-      const itemSrcName = String(item.sourceName || '').toLowerCase().replace(/\s+/g, '');
-      const srcMap = {
-        loklok: 'loklok',
-        narto: 'narto',
-        vivaone: 'vivaone',
-        vivamax: 'vivamax',
-        vivamb: 'moviebox',
-        hollywood: 'hollywood',
-        anime: 'anime',
-        drama: 'drama',
-        classics: 'classics',
-        adult: 'adult'
-      };
-      const target = srcMap[sourceKey] || sourceKey;
-      return itemSrcKey.includes(sourceKey) || itemSrcKey.includes(target) || itemSrcName.includes(target) || itemSrcName.includes(sourceKey);
-    }) : rawResults;
-    const filtered = filterContentBySettings(sourceFiltered).filter(item => {
+    const filtered = filterContentBySettings(rawResults).filter(item => {
       if (!item.id || state.filters.seenIds.has(item.id)) return false;
       state.filters.seenIds.add(item.id);
       return true;
