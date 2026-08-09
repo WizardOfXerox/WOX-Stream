@@ -757,9 +757,10 @@ module.exports = async (req, res) => {
 
       const hasStrictArea = !!area;
       const hasStrictCategory = !!category;
-
       let nartoItems = [];
-      let classicsItems = [];
+      let hollywoodItems = [];
+      let vivaItems = [];
+      let animeItems = [];
       let adultItems = [];
 
       if (!reqSource || reqSource === 'all') {
@@ -785,7 +786,7 @@ module.exports = async (req, res) => {
                 nartoFetch(nartoReq, nartoRes),
                 new Promise(resolve => setTimeout(resolve, 1200))
               ]);
-              const nartoSlice = nItems.slice((page * 6) % Math.max(1, nItems.length - 6), ((page * 6) % Math.max(1, nItems.length - 6)) + 6);
+              const nartoSlice = nItems.slice((page * 16) % Math.max(1, nItems.length - 16), ((page * 16) % Math.max(1, nItems.length - 16)) + 16);
               return { type: 'narto', items: nartoSlice.map(nItem => ({
                 id: maskId('narto', nItem.id),
                 category: '1',
@@ -801,7 +802,43 @@ module.exports = async (req, res) => {
           })());
         }
 
-        // Priority 3: Adult Anime (if 18+ setting enabled)
+        // Priority 3: Hollywood Movies (FlixHQ)
+        if (!hasStrictArea || ['61', '60', 'US', 'UK', '37'].includes(area)) {
+          subTasks.push((async () => {
+            try {
+              const hwModule = require('./hollywood');
+              const hwRes = await Promise.race([
+                hwModule.fetchHollywoodShelves(page + 1),
+                new Promise(r => setTimeout(() => r([]), 1500))
+              ]);
+              const list = Array.isArray(hwRes) ? hwRes : (hwRes && hwRes.shelves ? hwRes.shelves : []);
+              const items = [];
+              list.forEach(s => items.push(...(s.items || [])));
+              return { type: 'hollywood', items: items.slice(0, 10) };
+            } catch (_) { return null; }
+          })());
+        }
+
+        // Priority 4: Viva (Filipino & Asian Blockbusters)
+        subTasks.push((async () => {
+          try {
+            const vivaModule = require('./viva');
+            let vItems = [];
+            const vivaReq = { query: { action: 'catalog', source: 'all' } };
+            const vivaRes = {
+              status: function() { return this; },
+              json: function(d) { if (d && d.items) vItems = d.items; }
+            };
+            await Promise.race([
+              vivaModule(vivaReq, vivaRes),
+              new Promise(r => setTimeout(() => r([]), 1500))
+            ]);
+            const vSlice = vItems.slice((page * 8) % Math.max(1, vItems.length - 8), ((page * 8) % Math.max(1, vItems.length - 8)) + 8);
+            return { type: 'viva', items: vSlice };
+          } catch (_) { return null; }
+        })());
+
+        // Priority 5: Adult Anime (if 18+ setting enabled)
         if (allowAdultParam === 'true' && isGeneralCatalog) {
           subTasks.push((async () => {
             try {
@@ -812,8 +849,8 @@ module.exports = async (req, res) => {
                 Promise.race([hmamaModule.fetchHentaiMamaCatalog(page + 1, ''), new Promise(r => setTimeout(() => r([]), 1200))])
               ]);
               const resList = [];
-              if (hsItems && hsItems.length > 0) resList.push(...hsItems.slice(0, 4));
-              if (hmItems && hmItems.length > 0) resList.push(...hmItems.slice(0, 4));
+              if (hsItems && hsItems.length > 0) resList.push(...hsItems.slice(0, 12));
+              if (hmItems && hmItems.length > 0) resList.push(...hmItems.slice(0, 12));
               return { type: 'adult', items: resList };
             } catch (_) { return null; }
           })());
@@ -823,15 +860,19 @@ module.exports = async (req, res) => {
         settledSub.forEach(s => {
           if (s.status === 'fulfilled' && s.value) {
             if (s.value.type === 'narto') nartoItems = s.value.items;
+            else if (s.value.type === 'hollywood') hollywoodItems = s.value.items;
+            else if (s.value.type === 'viva') vivaItems = s.value.items;
             else if (s.value.type === 'adult') adultItems = s.value.items;
           }
         });
       }
 
-      // Order of precedence: 1. Loklok HD -> 2. Narto Drama -> 3. Adult (if enabled)
+      // Order of precedence: 1. Loklok HD -> 2. Narto Drama -> 3. Hollywood -> 4. Viva -> 5. Adult
       let combinedResults = [
         ...loklokItems,
         ...nartoItems,
+        ...hollywoodItems,
+        ...vivaItems,
         ...adultItems
       ];
 

@@ -2878,6 +2878,10 @@ async function executeCategorySearch(isReset = true) {
       return true;
     });
 
+    state.filters.cursor = data.nextCursor || '';
+    state.filters.hasMore = !!data.nextCursor && rawResults.length > 0;
+    state.filters.loadingMore = false;
+
     if (isReset) {
       if (filtered.length === 0) {
         grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;text-align:center;padding:3rem;">No media items found matching these category filters.</p>';
@@ -2893,17 +2897,21 @@ async function executeCategorySearch(isReset = true) {
       }
     }
 
-    state.filters.cursor = data.nextCursor || '';
-    state.filters.hasMore = !!data.nextCursor;
-    state.filters.loadingMore = false;
-
     if (spEl) spEl.style.display = 'none';
 
-    // Auto-fetch next page if deduplication/filtering yielded 0 new items on an infinite scroll page load
+    // Auto-fetch next page if deduplication/filtering yielded 0 new items on an infinite scroll page load (max 2 retries)
     if (!isReset && filtered.length === 0 && state.filters.hasMore) {
-      setTimeout(() => { executeCategorySearch(false); }, 100);
-      return;
+      state.filters.emptyRetries = (state.filters.emptyRetries || 0) + 1;
+      if (state.filters.emptyRetries < 2) {
+        setTimeout(() => { executeCategorySearch(false); }, 150);
+        return;
+      } else {
+        state.filters.hasMore = false;
+        if (txtEl) txtEl.innerText = 'END OF RESULTS';
+        return;
+      }
     }
+    state.filters.emptyRetries = 0;
 
     if (!state.filters.hasMore) {
       if (txtEl) txtEl.innerText = 'END OF RESULTS';
