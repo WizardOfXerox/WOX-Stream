@@ -1975,15 +1975,30 @@ function initUserUI() {
   const nickName = u.nickName || u.name || u.username || 'WOX Account';
   const avatar = (rawAvatar && rawAvatar.length > 5) ? rawAvatar : DEFAULT_AVATAR;
 
-  if (state.token) {
+  if (state.token && state.user) {
     if (logoutContainer) logoutContainer.style.display = 'block';
     userArea.innerHTML = `
-      <div style="display:flex;align-items:center;gap:0.75rem;">
-        <div style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;" onclick="switchNav('history')" title="Open Profile">
-          <img class="user-avatar-btn" src="${avatar}" alt="Avatar" style="width:36px;height:36px;border-radius:50%;border:2px solid #9333ea;object-fit:cover;" onerror="handleAvatarError(this)">
-          <span style="font-size:0.85rem;font-weight:600;color:#fff;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(nickName)}</span>
+      <div style="position:relative; display:flex; align-items:center; gap:0.5rem; cursor:pointer;" onclick="toggleUserDropdown(event)" title="User Options">
+        <img class="user-avatar-btn" src="${avatar}" alt="Avatar" style="width:34px;height:34px;border-radius:50%;border:2px solid var(--accent-cyan);object-fit:cover;box-shadow:0 0 10px rgba(0,255,255,0.3);" onerror="handleAvatarError(this)">
+        <span style="font-size:0.85rem;font-weight:600;color:#fff;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(nickName)}</span>
+        <span style="font-size:0.7rem;color:var(--text-muted);">▼</span>
+
+        <div id="user-dropdown-menu" style="display:none; position:absolute; top:calc(100% + 10px); right:0; background:rgba(12,12,18,0.96); backdrop-filter:blur(20px); border:1px solid rgba(0,255,255,0.2); border-radius:12px; min-width:200px; box-shadow:0 16px 40px rgba(0,0,0,0.8), 0 0 10px rgba(0,255,255,0.15); z-index:999999; padding:0.5rem 0;">
+          <div style="padding:0.75rem 1rem; border-bottom:1px solid rgba(255,255,255,0.08); font-size:0.8rem; color:var(--text-muted);">
+            Signed in as<br><strong style="color:#fff;font-size:0.85rem;">${escapeHtml(u.email || u.username || nickName)}</strong>
+          </div>
+          <a onclick="switchNav('history')" style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 1rem; color:#fff; text-decoration:none; font-size:0.85rem; cursor:pointer;" onmouseover="this.style.background='rgba(0,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+            🕒 Watch History
+          </a>
+          <a onclick="switchNav('watchlist')" style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 1rem; color:#fff; text-decoration:none; font-size:0.85rem; cursor:pointer;" onmouseover="this.style.background='rgba(0,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+            ⭐ My Watchlist
+          </a>
+          <div style="border-top:1px solid rgba(255,255,255,0.08); margin-top:0.25rem; padding-top:0.25rem;">
+            <a onclick="handleLogout()" style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 1rem; color:#ef4444; text-decoration:none; font-size:0.85rem; font-weight:600; cursor:pointer;" onmouseover="this.style.background='rgba(239,68,68,0.1)'" onmouseout="this.style.background='transparent'">
+              🚪 Sign Out
+            </a>
+          </div>
         </div>
-        <button class="btn btn-glass" onclick="handleLogout()" style="padding:0.35rem 0.75rem;font-size:0.8rem;color:#fb7185;border-color:rgba(225,29,72,0.4);background:rgba(225,29,72,0.1);">Sign Out</button>
       </div>
     `;
 
@@ -1992,14 +2007,14 @@ function initUserUI() {
     if (profileHeader) {
       profileHeader.innerHTML = `
         <div style="display:flex;align-items:center;gap:1.25rem;margin-bottom:1.5rem;background:var(--bg-card);padding:1.25rem;border-radius:16px;border:1px solid var(--border-glass);">
-          <img src="${avatar}" alt="Avatar" style="width:64px;height:64px;border-radius:50%;border:2px solid #9333ea;object-fit:cover;" onerror="handleAvatarError(this)">
+          <img src="${avatar}" alt="Avatar" style="width:64px;height:64px;border-radius:50%;border:2px solid var(--accent-cyan);object-fit:cover;box-shadow:0 0 12px rgba(0,255,255,0.4);" onerror="handleAvatarError(this)">
           <div>
             <div style="display:flex;align-items:center;gap:0.75rem;">
               <h2 style="font-size:1.4rem;font-weight:700;">${escapeHtml(nickName)}</h2>
               <button onclick="handleLogout()" style="background:none;border:none;color:#fb7185;font-size:0.8rem;cursor:pointer;text-decoration:underline;">Sign out</button>
             </div>
             <div style="margin-top:0.3rem;font-size:0.85rem;color:var(--text-muted);">
-              <span>Account active for Watch History, Watchlist & Favorites</span>
+              <span>Account active: Cloud History & Watchlist Sync Enabled</span>
             </div>
           </div>
         </div>
@@ -2014,6 +2029,169 @@ function initUserUI() {
     if (profileHeader) profileHeader.innerHTML = '';
   }
 }
+
+window.openLoginModal = function() {
+  const errEl = document.getElementById('auth-error-msg');
+  if (errEl) errEl.style.display = 'none';
+  
+  const loginForm = document.getElementById('form-auth-login');
+  if (loginForm) loginForm.reset();
+  const regForm = document.getElementById('form-auth-register');
+  if (regForm) regForm.reset();
+  
+  switchAuthTab('login');
+  openModal('modal-login');
+};
+
+window.switchAuthTab = function(tab) {
+  const loginTab = document.getElementById('tab-auth-login');
+  const regTab = document.getElementById('tab-auth-register');
+  const loginForm = document.getElementById('form-auth-login');
+  const regForm = document.getElementById('form-auth-register');
+  const errEl = document.getElementById('auth-error-msg');
+  if (errEl) errEl.style.display = 'none';
+
+  if (tab === 'register') {
+    if (loginForm) loginForm.style.display = 'none';
+    if (regForm) regForm.style.display = 'flex';
+    if (loginTab) {
+      loginTab.style.fontWeight = '500';
+      loginTab.style.color = 'var(--text-muted)';
+      loginTab.style.borderBottom = 'none';
+    }
+    if (regTab) {
+      regTab.style.fontWeight = '700';
+      regTab.style.color = '#fff';
+      regTab.style.borderBottom = '2px solid #ec4899';
+    }
+  } else {
+    if (regForm) regForm.style.display = 'none';
+    if (loginForm) loginForm.style.display = 'flex';
+    if (loginTab) {
+      loginTab.style.fontWeight = '700';
+      loginTab.style.color = '#fff';
+      loginTab.style.borderBottom = '2px solid var(--accent-cyan)';
+    }
+    if (regTab) {
+      regTab.style.fontWeight = '500';
+      regTab.style.color = 'var(--text-muted)';
+      regTab.style.borderBottom = 'none';
+    }
+  }
+};
+
+window.handleWoxLogin = async function(e) {
+  if (e) e.preventDefault();
+  const identifier = document.getElementById('login-identifier') ? document.getElementById('login-identifier').value.trim() : '';
+  const password = document.getElementById('login-password') ? document.getElementById('login-password').value.trim() : '';
+  const errEl = document.getElementById('auth-error-msg');
+
+  if (!identifier || !password) {
+    if (errEl) {
+      errEl.innerText = 'Please enter your username/email and password.';
+      errEl.style.display = 'block';
+    }
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth?action=login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emailOrUsername: identifier, password: password })
+    });
+    const data = await res.json();
+
+    if (data.success && data.token) {
+      state.token = data.token;
+      state.user = data.user;
+      localStorage.setItem('loklok_token', data.token);
+      localStorage.setItem('loklok_user', JSON.stringify(data.user));
+
+      initUserUI();
+      closeModal('modal-login');
+      showToast(`Welcome back, ${data.user.username || data.user.nickName || 'User'}!`);
+    } else {
+      if (errEl) {
+        errEl.innerText = data.error || 'Invalid credentials.';
+        errEl.style.display = 'block';
+      }
+    }
+  } catch (err) {
+    if (errEl) {
+      errEl.innerText = 'Connection error. Please try again.';
+      errEl.style.display = 'block';
+    }
+  }
+};
+
+window.handleWoxRegister = async function(e) {
+  if (e) e.preventDefault();
+  const username = document.getElementById('reg-username') ? document.getElementById('reg-username').value.trim() : '';
+  const email = document.getElementById('reg-email') ? document.getElementById('reg-email').value.trim() : '';
+  const password = document.getElementById('reg-password') ? document.getElementById('reg-password').value.trim() : '';
+  const errEl = document.getElementById('auth-error-msg');
+
+  if (!username || !email || !password) {
+    if (errEl) {
+      errEl.innerText = 'Please fill out all fields.';
+      errEl.style.display = 'block';
+    }
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth?action=register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password })
+    });
+    const data = await res.json();
+
+    if (data.success && data.token) {
+      state.token = data.token;
+      state.user = data.user;
+      localStorage.setItem('loklok_token', data.token);
+      localStorage.setItem('loklok_user', JSON.stringify(data.user));
+
+      initUserUI();
+      closeModal('modal-login');
+      showToast(`Account created! Welcome, ${data.user.username}!`);
+    } else {
+      if (errEl) {
+        errEl.innerText = data.error || 'Registration failed.';
+        errEl.style.display = 'block';
+      }
+    }
+  } catch (err) {
+    if (errEl) {
+      errEl.innerText = 'Connection error. Please try again.';
+      errEl.style.display = 'block';
+    }
+  }
+};
+
+window.handleLogout = function() {
+  localStorage.removeItem('loklok_token');
+  localStorage.removeItem('loklok_user');
+  state.token = '';
+  state.user = null;
+  initUserUI();
+  showToast('Signed out of WOX-Stream.');
+};
+
+window.toggleUserDropdown = function(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('user-dropdown-menu');
+  if (menu) {
+    menu.style.display = (menu.style.display === 'none' || !menu.style.display) ? 'block' : 'none';
+  }
+};
+
+document.addEventListener('click', () => {
+  const menu = document.getElementById('user-dropdown-menu');
+  if (menu) menu.style.display = 'none';
+});
 
 // Internal State & Fallbacks
 const SVG_FALLBACK = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450"><rect width="100%" height="100%" fill="%2312161f"/><text x="50%" y="50%" fill="%2364748b" font-size="16" text-anchor="middle">No Cover</text></svg>`;

@@ -106,24 +106,63 @@ module.exports = async (req, res) => {
     }
 
     // 3. GET CURRENT USER PROFILE (me)
-    const tokenStr = req.headers.token || req.query.token || req.body?.token || '';
-    const payload = parseToken(tokenStr);
+    if (action === 'me') {
+      const tokenStr = req.headers.token || req.query.token || req.body?.token || '';
+      const payload = parseToken(tokenStr);
 
-    if (payload && payload.userId) {
-      const user = db.users.find(u => u.id === payload.userId);
-      if (user) {
-        return res.status(200).json({
-          success: true,
-          user: {
-            id: user.id,
-            username: user.username,
-            nickName: user.username,
-            email: user.email,
-            avatar: user.avatar,
-            portrait: user.avatar
-          }
-        });
+      if (payload && payload.userId) {
+        const user = db.users.find(u => u.id === payload.userId);
+        if (user) {
+          return res.status(200).json({
+            success: true,
+            user: {
+              id: user.id,
+              username: user.username,
+              nickName: user.username,
+              email: user.email,
+              avatar: user.avatar,
+              portrait: user.avatar
+            }
+          });
+        }
       }
+
+      return res.status(200).json({
+        success: false,
+        error: 'Unauthenticated or guest session'
+      });
+    }
+
+    // 4. UPDATE USER PROFILE
+    if (action === 'update_profile') {
+      const tokenStr = req.headers.token || req.query.token || req.body?.token || '';
+      const payload = parseToken(tokenStr);
+      if (!payload || !payload.userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const userIdx = db.users.findIndex(u => u.id === payload.userId);
+      if (userIdx === -1) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+
+      const { avatar, username } = req.body || {};
+      if (avatar) db.users[userIdx].avatar = avatar.trim();
+      if (username) db.users[userIdx].username = username.trim();
+      writeDb(db);
+
+      const updatedUser = db.users[userIdx];
+      return res.status(200).json({
+        success: true,
+        user: {
+          id: updatedUser.id,
+          username: updatedUser.username,
+          nickName: updatedUser.username,
+          email: updatedUser.email,
+          avatar: updatedUser.avatar,
+          portrait: updatedUser.avatar
+        }
+      });
     }
 
     return res.status(200).json({
