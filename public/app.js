@@ -96,8 +96,9 @@ window.toggleSetting = function(key, isChecked) {
   state.settings[key] = isChecked;
   localStorage.setItem(`loklok_${key}`, isChecked ? 'true' : 'false');
   updateAdultPillVisibility();
-  if (key === 'blockLgbt' || key === 'blockPorno') {
+  if (key.startsWith('source') || key === 'blockLgbt' || key === 'blockPorno') {
     loadHomeFeed();
+    if (state.activeNav === 'category') executeCategorySearch(true);
   }
 };
 
@@ -2036,7 +2037,13 @@ const state = {
     autoboot: localStorage.getItem('loklok_autoboot') === 'true',
     blockPorno: localStorage.getItem('loklok_blockPorno') === 'true',
     blockLgbt: localStorage.getItem('loklok_blockLgbt') === 'true',
-    allowAdult: localStorage.getItem('loklok_allowAdult') === 'true'
+    allowAdult: localStorage.getItem('loklok_allowAdult') === 'true',
+    sourceLoklok: localStorage.getItem('loklok_sourceLoklok') !== 'false',
+    sourceNarto: localStorage.getItem('loklok_sourceNarto') !== 'false',
+    sourceHollywood: localStorage.getItem('loklok_sourceHollywood') !== 'false',
+    sourceViva: localStorage.getItem('loklok_sourceViva') !== 'false',
+    sourceAnime: localStorage.getItem('loklok_sourceAnime') !== 'false',
+    sourceClassics: localStorage.getItem('loklok_sourceClassics') === 'true'
   },
   filters: {
     params: '',
@@ -2579,10 +2586,25 @@ function initSettingsUI() {
   const langSelect = document.getElementById('setting-language-select');
   const cacheText = document.getElementById('cache-size-text');
 
+  const toggleLoklok = document.getElementById('setting-source-loklok');
+  const toggleNarto = document.getElementById('setting-source-narto');
+  const toggleHollywood = document.getElementById('setting-source-hollywood');
+  const toggleViva = document.getElementById('setting-source-viva');
+  const toggleAnime = document.getElementById('setting-source-anime');
+  const toggleClassics = document.getElementById('setting-source-classics');
+
   if (toggleAdult) toggleAdult.checked = state.settings.allowAdult;
   if (toggleLgbt) toggleLgbt.checked = state.settings.blockLgbt;
   if (togglePorno) togglePorno.checked = state.settings.blockPorno;
   if (toggleBoot) toggleBoot.checked = state.settings.autoboot;
+
+  if (toggleLoklok) toggleLoklok.checked = state.settings.sourceLoklok;
+  if (toggleNarto) toggleNarto.checked = state.settings.sourceNarto;
+  if (toggleHollywood) toggleHollywood.checked = state.settings.sourceHollywood;
+  if (toggleViva) toggleViva.checked = state.settings.sourceViva;
+  if (toggleAnime) toggleAnime.checked = state.settings.sourceAnime;
+  if (toggleClassics) toggleClassics.checked = state.settings.sourceClassics;
+
   if (langSelect) langSelect.value = state.language;
   if (cacheText) cacheText.innerText = calculateCacheSize();
 }
@@ -3063,13 +3085,25 @@ function deduplicateClientMediaList(items) {
 function filterContentBySettings(items) {
   if (!Array.isArray(items)) return [];
   const filtered = items.filter(item => {
+    if (!item) return false;
     const title = (item.title || '').toLowerCase();
+    const srcKey = String(item.sourceKey || '').toLowerCase();
+    const isLoklok = !item.isNarto && !item.isViva && (srcKey === 'loklok' || item.sourceName === 'Loklok HD');
+
     if (state.settings.blockLgbt && (title.includes('lgbt') || title.includes('queer') || title.includes('gay') || title.includes('lesbian'))) {
       return false;
     }
     if (state.settings.blockPorno && (title.includes('18+') || title.includes('adult') || title.includes('erotic'))) {
       return false;
     }
+
+    if (state.settings.sourceLoklok === false && isLoklok) return false;
+    if (state.settings.sourceNarto === false && (item.isNarto || srcKey === 'narto')) return false;
+    if (state.settings.sourceViva === false && (item.isViva || srcKey.includes('viva'))) return false;
+    if (state.settings.sourceHollywood === false && (srcKey === 'hollywood' || srcKey === 'flixhq')) return false;
+    if (state.settings.sourceAnime === false && (srcKey === 'anime' || srcKey === 'drama')) return false;
+    if (state.settings.sourceClassics === false && (srcKey === 'classics' || item.sourceName === 'Classics Archive')) return false;
+
     return true;
   });
   return deduplicateClientMediaList(filtered);
