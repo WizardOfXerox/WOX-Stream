@@ -150,20 +150,22 @@ module.exports = async (req, res) => {
       return null;
     })()));
 
-    // Task 2: Classics Archive
-    extraTasks.push(withTimeout((async () => {
-      try {
-        const classicsModule = require('./classics');
-        const classicsRes = await classicsModule.fetchClassicsShelves();
-        if (classicsRes && classicsRes.shelves && Array.isArray(classicsRes.shelves)) {
-          return classicsRes.shelves.map(s => ({
-            ...s,
-            items: robustDeduplicate(s.items)
-          })).filter(s => s.items && s.items.length > 0);
-        }
-      } catch (_) {}
-      return null;
-    })()));
+    // Task 2: Classics Archive (Only if explicitly requested)
+    if (req.query.source === 'classics') {
+      extraTasks.push(withTimeout((async () => {
+        try {
+          const classicsModule = require('./classics');
+          const classicsRes = await classicsModule.fetchClassicsShelves();
+          if (classicsRes && classicsRes.shelves && Array.isArray(classicsRes.shelves)) {
+            return classicsRes.shelves.map(s => ({
+              ...s,
+              items: robustDeduplicate(s.items)
+            })).filter(s => s.items && s.items.length > 0);
+          }
+        } catch (_) {}
+        return null;
+      })()));
+    }
 
     // Task 3: Adult Anime (if allowAdult === 'true')
     if (allowAdultParam === 'true') {

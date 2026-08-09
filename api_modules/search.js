@@ -459,18 +459,20 @@ module.exports = async (req, res) => {
         }
       } catch (_) {}
 
-      // Search Classics
-      try {
-        const classicsModule = require('./classics');
-        const classicsRes = await classicsModule.searchClassics(keyword.trim());
-        if (classicsRes && Array.isArray(classicsRes)) {
-          const filtered = classicsRes.filter(item => {
-            const tLower = String(item.title || '').toLowerCase();
-            return queryWords.length === 0 || queryWords.some(w => tLower.includes(w));
-          });
-          results.push(...filtered);
-        }
-      } catch (_) {}
+      // Search Classics (Only if explicitly requested)
+      if (reqSource === 'classics') {
+        try {
+          const classicsModule = require('./classics');
+          const classicsRes = await classicsModule.searchClassics(keyword.trim());
+          if (classicsRes && Array.isArray(classicsRes)) {
+            const filtered = classicsRes.filter(item => {
+              const tLower = String(item.title || '').toLowerCase();
+              return queryWords.length === 0 || queryWords.some(w => tLower.includes(w));
+            });
+            results.push(...filtered);
+          }
+        } catch (_) {}
+      }
 
       // Search Adult (if allowAdult === 'true')
       const allowAdultParam = req.query.allowAdult || (req.headers ? req.headers.allowadult : '') || '';
@@ -713,14 +715,17 @@ module.exports = async (req, res) => {
       else if (category) kwToSearch = category;
       else kwToSearch = 'season';
 
-      try {
-        const h5Res = await h5ApiSearch(kwToSearch);
-        if (h5Res && h5Res.length > 0) {
-          rawResults = h5Res;
-        }
-      } catch (err) { console.error('Category h5ApiSearch error:', err); }
-
-      console.log('SEARCH.JS DEBUG: kwToSearch:', kwToSearch, 'rawResults.length:', rawResults.length);
+      const searchKeywordsFallback = [kwToSearch, 'movie', 'season', '2025', 'love', 'action', 'korea'];
+      for (const kwAttempt of searchKeywordsFallback) {
+        if (!kwAttempt) continue;
+        try {
+          const h5Res = await h5ApiSearch(kwAttempt);
+          if (h5Res && h5Res.length > 0) {
+            rawResults = h5Res;
+            break;
+          }
+        } catch (_) {}
+      }
 
       // Fallback: If h5ApiSearch returned no items, try legacy LOKLOK_API_BASE
       if (rawResults.length === 0) {
@@ -796,21 +801,7 @@ module.exports = async (req, res) => {
           })());
         }
 
-        // Priority 3: Classics Archive (Trailing fallback ONLY, max 4 items)
-        if (isGeneralCatalog) {
-          subTasks.push((async () => {
-            try {
-              const classicsModule = require('./classics');
-              const cItems = await Promise.race([
-                classicsModule.fetchClassicsPaginated(page + 1, 'feature_films'),
-                new Promise(resolve => setTimeout(() => resolve([]), 1200))
-              ]);
-              return { type: 'classics', items: cItems ? cItems.slice(0, 4) : [] };
-            } catch (_) { return null; }
-          })());
-        }
-
-        // Priority 4: Adult Anime (if 18+ setting enabled)
+        // Priority 3: Adult Anime (if 18+ setting enabled)
         if (allowAdultParam === 'true' && isGeneralCatalog) {
           subTasks.push((async () => {
             try {
@@ -832,18 +823,16 @@ module.exports = async (req, res) => {
         settledSub.forEach(s => {
           if (s.status === 'fulfilled' && s.value) {
             if (s.value.type === 'narto') nartoItems = s.value.items;
-            else if (s.value.type === 'classics') classicsItems = s.value.items;
             else if (s.value.type === 'adult') adultItems = s.value.items;
           }
         });
       }
 
-      // Order of precedence: 1. Loklok HD -> 2. Narto Drama -> 3. Adult (if enabled) -> 4. Classics (trailing max 4)
+      // Order of precedence: 1. Loklok HD -> 2. Narto Drama -> 3. Adult (if enabled)
       let combinedResults = [
         ...loklokItems,
         ...nartoItems,
-        ...adultItems,
-        ...classicsItems
+        ...adultItems
       ];
 
       const lastRawItem = rawResults.length > 0 ? rawResults[rawResults.length - 1] : null;

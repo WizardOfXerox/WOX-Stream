@@ -2043,7 +2043,7 @@ const state = {
     sourceHollywood: localStorage.getItem('loklok_sourceHollywood') !== 'false',
     sourceViva: localStorage.getItem('loklok_sourceViva') !== 'false',
     sourceAnime: localStorage.getItem('loklok_sourceAnime') !== 'false',
-    sourceClassics: localStorage.getItem('loklok_sourceClassics') === 'true'
+    sourceClassics: false
   },
   filters: {
     params: '',
@@ -3102,7 +3102,7 @@ function filterContentBySettings(items) {
     if (state.settings.sourceViva === false && (item.isViva || srcKey.includes('viva'))) return false;
     if (state.settings.sourceHollywood === false && (srcKey === 'hollywood' || srcKey === 'flixhq')) return false;
     if (state.settings.sourceAnime === false && (srcKey === 'anime' || srcKey === 'drama')) return false;
-    if (state.settings.sourceClassics === false && (srcKey === 'classics' || item.sourceName === 'Classics Archive')) return false;
+    if (state.settings.sourceClassics !== true && (srcKey === 'classics' || item.sourceName === 'Classics Archive' || item.sourceName === 'Classics' || item.category === '0')) return false;
 
     return true;
   });
