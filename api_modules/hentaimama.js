@@ -139,8 +139,8 @@ async function getHentaiMamaPlayUrl(epPath) {
     if (!pageRes.ok) return null;
     const html = await pageRes.text();
 
-    const postReportInput = html.match(/id="post_report"[\s\S]*?<input[^>]+value="([^"]+)"/i);
-    const actionVal = postReportInput ? postReportInput[1] : '';
+    const actionMatch = html.match(/action:\s*'get_player_contents'[\s\S]*?a:\s*'([^']+)'/i);
+    const actionVal = actionMatch ? actionMatch[1] : '';
 
     if (!actionVal) return null;
 
@@ -159,9 +159,10 @@ async function getHentaiMamaPlayUrl(epPath) {
     });
 
     if (!ajaxRes.ok) return null;
-    const ajaxHtml = await ajaxRes.text();
+    const ajaxJson = await ajaxRes.json();
+    if (!Array.isArray(ajaxJson) || ajaxJson.length === 0) return null;
 
-    const iframeMatch = ajaxHtml.match(/src="([^"]+)"/i);
+    const iframeMatch = ajaxJson[0].match(/src="([^"]+)"/i);
     if (!iframeMatch) return null;
 
     const iframeUrl = iframeMatch[1];
@@ -169,11 +170,11 @@ async function getHentaiMamaPlayUrl(epPath) {
     if (!iframeRes.ok) return null;
     const iframeHtml = await iframeRes.text();
 
-    const videoMatch = iframeHtml.match(/(https?:[^\s"']+\.mp4[^\s"']*)/i);
-    if (!videoMatch) return null;
+    const mp4Match = iframeHtml.match(/file:\s*["']([^"']+\.mp4[^"']*)["']/i) || iframeHtml.match(/(https?:[^\s"']+\.mp4[^\s"']*)/i);
+    if (!mp4Match) return null;
 
     return {
-      playUrl: videoMatch[1],
+      playUrl: mp4Match[1],
       format: 'mp4',
       subtitles: []
     };

@@ -257,10 +257,12 @@ const handler = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const { action, q, id, episodeId } = req.query;
+  const act = action || 'catalog';
 
   try {
-    switch (action) {
-      case 'catalog': {
+    switch (act) {
+      case 'catalog':
+      case 'shelves': {
         const shelves = await fetchDramaShelves();
         return res.json({ success: true, data: shelves });
       }

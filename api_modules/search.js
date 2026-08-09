@@ -167,7 +167,7 @@ function deduplicateResults(items) {
   return Array.from(map.values());
 }
 
-module.exports = async (req, res) => {
+async function searchHandler(req, res) {
   setCorsHeaders(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
 
@@ -886,3 +886,11 @@ module.exports = async (req, res) => {
     return res.status(200).json({ success: true, results: [], error: error.message });
   }
 };
+
+searchHandler.H5_RSA_PUBLIC_KEY = H5_RSA_PUBLIC_KEY;
+searchHandler.h5GenKey = h5GenKey;
+searchHandler.h5GetSign = h5GetSign;
+searchHandler.h5RsaEncrypt = h5RsaEncrypt;
+searchHandler.h5ApiSearch = h5ApiSearch;
+
+module.exports = searchHandler;

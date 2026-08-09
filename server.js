@@ -88,38 +88,38 @@ const server = http.createServer(async (req, res) => {
 
   // Viva Platforms API Routes
   if (pathname === '/api/viva' || pathname.startsWith('/api/viva')) {
-    const vivaHandler = require('./api/viva');
+    const vivaHandler = require('./api_modules/viva');
     return vivaHandler(req, res);
   }
 
   // Narto Drama API Routes
-  if (pathname.startsWith('/api/narto/')) {
-    const nartoRouter = require('./api/narto');
-    req.url = pathname.replace('/api/narto', '');
+  if (pathname.startsWith('/api/narto')) {
+    const nartoRouter = require('./api_modules/narto');
+    req.url = pathname.replace('/api/narto', '') || '/';
     return nartoRouter(req, res);
   }
 
   // Hollywood API Route
   if (pathname.startsWith('/api/hollywood')) {
-    const hollywoodHandler = require('./api/hollywood');
+    const hollywoodHandler = require('./api_modules/hollywood');
     return hollywoodHandler(req, res);
   }
 
   // Anime API Route
   if (pathname.startsWith('/api/anime-provider')) {
-    const animeHandler = require('./api/anime-provider');
+    const animeHandler = require('./api_modules/anime-provider');
     return animeHandler(req, res);
   }
 
   // Asian Drama API Route
   if (pathname.startsWith('/api/asian-drama')) {
-    const dramaHandler = require('./api/asian-drama');
+    const dramaHandler = require('./api_modules/asian-drama');
     return dramaHandler(req, res);
   }
 
   // Classics API Route
   if (pathname.startsWith('/api/classics')) {
-    const classicsHandler = require('./api/classics');
+    const classicsHandler = require('./api_modules/classics');
     return classicsHandler(req, res);
   }
 

@@ -231,9 +231,10 @@ async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
 
     const { action, id, q } = req.query;
+    const act = action || 'catalog';
 
     try {
-        if (action === 'catalog') {
+        if (act === 'catalog' || act === 'shelves') {
             const data = await fetchAnimeShelves();
             return res.json(data);
         } else if (action === 'search') {

@@ -145,15 +145,16 @@ async function getHstreamPlayUrl(epPath) {
     const pageRes = await fetch(fullUrl, { headers: HEADERS });
     if (!pageRes.ok) return null;
 
-    const setCookieHeader = pageRes.headers.get('set-cookie') || '';
-    const xsrfCookieMatch = setCookieHeader.match(/XSRF-TOKEN=([^;]+)/);
-    if (!xsrfCookieMatch) return null;
-    const xsrfToken = decodeURIComponent(xsrfCookieMatch[1]);
-
     const html = await pageRes.text();
-    const eidMatch = html.match(/<input[^>]+id="e_id"[^>]+value="([^"]+)"/i);
+    const csrfMatch = html.match(/name="_token"\s+value="([^"]+)"/i);
+    const eidMatch = html.match(/id="e_id"[^>]+value="([^"]+)"/i);
+
     if (!eidMatch) return null;
     const episodeId = eidMatch[1];
+    const csrfToken = csrfMatch ? csrfMatch[1] : '';
+
+    const rawCookies = pageRes.headers.getSetCookie ? pageRes.headers.getSetCookie() : [pageRes.headers.get('set-cookie')];
+    const cookieHeader = rawCookies.map(c => String(c || '').split(';')[0]).filter(Boolean).join('; ');
 
     const apiHeaders = {
       'User-Agent': HEADERS['User-Agent'],
@@ -161,8 +162,9 @@ async function getHstreamPlayUrl(epPath) {
       'Origin': BASE_URL,
       'Content-Type': 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
-      'X-XSRF-TOKEN': xsrfToken,
-      'Cookie': `XSRF-TOKEN=${xsrfCookieMatch[1]}`
+      'X-CSRF-TOKEN': csrfToken,
+      'X-XSRF-TOKEN': csrfToken,
+      'Cookie': cookieHeader
     };
 
     const apiRes = await fetch(`${BASE_URL}/player/api`, {
@@ -180,7 +182,7 @@ async function getHstreamPlayUrl(epPath) {
 
     const domain = apiJson.stream_domains[Math.floor(Math.random() * apiJson.stream_domains.length)];
     const baseStream = `${domain}/${apiJson.stream_url}`;
-    const playUrl = `${baseStream}/1080/manifest.mpd`;
+    const playUrl = `${baseStream}/720/manifest.mpd`;
 
     return {
       playUrl: playUrl,

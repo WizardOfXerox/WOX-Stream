@@ -127,6 +127,9 @@ async function getAdultDetail(id) {
     return null;
 }
 
+const hstreamModule = require('./hstream');
+const hmamaModule = require('./hentaimama');
+
 const handler = async (req, res) => {
     setCorsHeaders(res);
     if (req.method === 'OPTIONS') return res.status(200).end();
@@ -135,8 +138,13 @@ const handler = async (req, res) => {
 
     try {
         if (action === 'catalog') {
-            const shelves = await fetchAdultShelves();
-            return res.status(200).json({ success: true, shelves });
+            const [shelves, hsCatalog, hmCatalog] = await Promise.all([
+                fetchAdultShelves().catch(() => []),
+                hstreamModule.fetchHstreamCatalog(1).catch(() => []),
+                hmamaModule.fetchHentaiMamaCatalog(1).catch(() => [])
+            ]);
+            const items = [...hsCatalog, ...hmCatalog];
+            return res.status(200).json({ success: true, items, shelves });
         } else if (action === 'search') {
             const query = req.query.q || '';
             const results = await searchAdult(query);
