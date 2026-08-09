@@ -1,29 +1,5 @@
-const { setCorsHeaders } = require('./_utils');
+const { setCorsHeaders, hashPassword, verifyPassword, generateToken, parseToken } = require('./_utils');
 const { readDb, writeDb } = require('./_db');
-const crypto = require('crypto');
-
-function hashPassword(password) {
-  return crypto.createHash('sha256').update(password).digest('hex');
-}
-
-function generateToken(user) {
-  const payload = {
-    userId: user.id,
-    email: user.email,
-    username: user.username,
-    createdAt: Date.now()
-  };
-  return Buffer.from(JSON.stringify(payload)).toString('base64');
-}
-
-function parseToken(tokenStr) {
-  try {
-    const json = Buffer.from(tokenStr, 'base64').toString('utf-8');
-    return JSON.parse(json);
-  } catch (_) {
-    return null;
-  }
-}
 
 module.exports = async (req, res) => {
   setCorsHeaders(res);
@@ -47,11 +23,13 @@ module.exports = async (req, res) => {
       }
 
       const userId = 'wox_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+      const { salt, hash } = hashPassword(password);
       const newUser = {
         id: userId,
         username: username.trim(),
         email: email.trim().toLowerCase(),
-        passwordHash: hashPassword(password),
+        salt: salt,
+        passwordHash: hash,
         avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(username)}`,
         createdAt: Date.now()
       };
@@ -85,8 +63,16 @@ module.exports = async (req, res) => {
       const targetStr = emailOrUsername.trim().toLowerCase();
       const user = db.users.find(u => u.email.toLowerCase() === targetStr || u.username.toLowerCase() === targetStr);
 
-      if (!user || user.passwordHash !== hashPassword(password)) {
+      if (!user || !verifyPassword(password, user.salt || '', user.passwordHash || '')) {
         return res.status(401).json({ success: false, error: 'Invalid email/username or password.' });
+      }
+
+      // Automatically upgrade legacy plain SHA-256 password hash to PBKDF2 salted hash
+      if (!user.salt) {
+        const { salt, hash } = hashPassword(password);
+        user.salt = salt;
+        user.passwordHash = hash;
+        writeDb(db);
       }
 
       const token = generateToken(user);

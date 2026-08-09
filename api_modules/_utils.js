@@ -348,6 +348,65 @@ function robustDeduplicate(items) {
   return Array.from(map.values());
 }
 
+const AUTH_SECRET = process.env.WOX_JWT_SECRET || 'wox_stream_cyberpunk_secret_key_2026_x89f!';
+
+function hashPassword(password, salt) {
+  if (!salt) salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
+  return { salt, hash };
+}
+
+function verifyPassword(password, storedSalt, storedHash) {
+  if (!storedSalt || !storedHash) {
+    // Legacy fallback for plain SHA256 hashes created during initial dev testing
+    const legacyHash = crypto.createHash('sha256').update(password).digest('hex');
+    return legacyHash === storedHash;
+  }
+  try {
+    const { hash } = hashPassword(password, storedSalt);
+    const hashBuf = Buffer.from(hash, 'hex');
+    const storedBuf = Buffer.from(storedHash, 'hex');
+    if (hashBuf.length !== storedBuf.length) return false;
+    return crypto.timingSafeEqual(hashBuf, storedBuf);
+  } catch (_) {
+    return false;
+  }
+}
+
+function generateToken(user) {
+  const payload = {
+    userId: user.id,
+    email: user.email,
+    username: user.username,
+    exp: Date.now() + (30 * 24 * 60 * 60 * 1000)
+  };
+  const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto.createHmac('sha256', AUTH_SECRET).update(payloadB64).digest('base64url');
+  return `${payloadB64}.${signature}`;
+}
+
+function parseToken(tokenStr) {
+  if (!tokenStr || typeof tokenStr !== 'string' || !tokenStr.includes('.')) return null;
+  const parts = tokenStr.split('.');
+  if (parts.length !== 2) return null;
+
+  const [payloadB64, signature] = parts;
+  const expectedSig = crypto.createHmac('sha256', AUTH_SECRET).update(payloadB64).digest('base64url');
+
+  try {
+    const sigBuf = Buffer.from(signature, 'utf-8');
+    const expBuf = Buffer.from(expectedSig, 'utf-8');
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      return null;
+    }
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf-8'));
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch (_) {
+    return null;
+  }
+}
+
 module.exports = {
   LOKLOK_API_BASE,
   PROVIDER_PREFIXES,
@@ -364,5 +423,9 @@ module.exports = {
   decryptStreamTicket,
   cleanTitleForDeduplication,
   normalizeTitleKey,
-  robustDeduplicate
+  robustDeduplicate,
+  hashPassword,
+  verifyPassword,
+  generateToken,
+  parseToken
 };

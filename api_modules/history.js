@@ -1,16 +1,7 @@
-const { setCorsHeaders, fixCoverUrl, loklokFetch } = require('./_utils');
+const { setCorsHeaders, fixCoverUrl, loklokFetch, parseToken } = require('./_utils');
 const { readDb, writeDb } = require('./_db');
 const { exec } = require('child_process');
 const path = require('path');
-
-function parseToken(tokenStr) {
-  try {
-    const json = Buffer.from(tokenStr, 'base64').toString('utf-8');
-    return JSON.parse(json);
-  } catch (_) {
-    return null;
-  }
-}
 
 function getLocalPcHistory() {
   return new Promise((resolve) => {
