@@ -1950,7 +1950,8 @@ window.openDetailModal = async function(id, category = 1) {
   content.innerHTML = '<div class="spinner"></div>';
 
   try {
-    const res = await fetch(`/api/detail?id=${id}&category=${category}&token=${encodeURIComponent(state.token)}`);
+    const cleanTok = (state.token && state.token !== 'null' && state.token !== 'undefined' && state.token !== '1' && String(state.token).length > 8) ? state.token : '';
+    const res = await fetch(`/api/detail?id=${id}&category=${category}&token=${encodeURIComponent(cleanTok)}`);
     const data = await res.json();
 
     const detail = data.detail || (data.success && (data.title || data.name || (data.episodes && data.episodes.length > 0)) ? data : null);
@@ -4718,7 +4719,7 @@ function renderWoxCard(item, isHighPriority = false) {
   const yearText = item.releaseDate || item.year || item.area || domainLabel;
 
   return `
-    <div class="loklok-card" onclick="openDetailModal('${item.id}', '${item.category || 1}')">
+    <div class="loklok-card" onclick="openDetailModal('${item.id}', '${item.category !== undefined && item.category !== null ? item.category : 1}')">
       <div class="card-poster-wrap">
         <span class="source-pill-badge" style="background:${sBadge.bg};color:${sBadge.color};">${sBadge.icon} ${escapeHtml(sBadge.name)}</span>
         <img class="card-poster-img" src="${item.cover}" alt="${escapeHtml(cleanTitle)}" decoding="async" ${isHighPriority ? 'fetchpriority="high"' : 'loading="lazy"'} onerror="handleImgError(this)">

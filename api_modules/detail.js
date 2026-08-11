@@ -150,7 +150,7 @@ module.exports = async (req, res) => {
     let usedCategory = initialCategory;
 
     for (const cat of categoriesToTry) {
-      // Primary: Mobile CMS API (ga-mobile-api.loklok.tv)
+      // Primary: Mobile CMS API (ga-mobile-api.loklok.tv) with user token if provided
       try {
         const data = await loklokFetch(`/movieDrama/get?id=${id}&category=${cat}`, { headers });
         if ((data.code === '00000' || data.code === '000000') && data.data && (data.data.name || data.data.title || data.data.episodeVo)) {
@@ -159,6 +159,19 @@ module.exports = async (req, res) => {
           break;
         }
       } catch (_) {}
+
+      // Fallback: Guest headers without token (in case user token is invalid/expired)
+      if (token) {
+        try {
+          const guestHeaders = getLoklokHeaders('');
+          const data = await loklokFetch(`/movieDrama/get?id=${id}&category=${cat}`, { headers: guestHeaders });
+          if ((data.code === '00000' || data.code === '000000') && data.data && (data.data.name || data.data.title || data.data.episodeVo)) {
+            drama = data.data;
+            usedCategory = cat;
+            break;
+          }
+        } catch (_) {}
+      }
 
       // Secondary: Signed H5 API fallback
       drama = await h5ApiGetDetail(id, cat);
