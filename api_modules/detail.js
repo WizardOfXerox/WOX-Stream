@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid or missing media id' });
     }
 
-    const cacheKey = `detail_${rawId}_${initialCategory}`;
+    const cacheKey = `detail_v14_${rawId}_${initialCategory}`;
     const cached = detailCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp < DETAIL_CACHE_TTL)) {
       res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=300');

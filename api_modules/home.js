@@ -13,7 +13,7 @@ module.exports = async (req, res) => {
     const page = req.query.page || 0;
     const token = req.headers.token || req.query.token || '';
     const allowAdultParam = req.query.allowAdult || (req.headers ? req.headers.allowadult : '') || '';
-    const cacheKey = `home_${page}_${allowAdultParam === 'true' ? 'adult' : 'safe'}_${req.query.source || 'all'}`;
+    const cacheKey = `home_v14_${page}_${allowAdultParam === 'true' ? 'adult' : 'safe'}_${req.query.source || 'all'}`;
 
     // Return from memory cache if fresh (< 60 seconds)
     const cached = homeCache.get(cacheKey);
