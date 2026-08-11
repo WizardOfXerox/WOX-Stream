@@ -57,8 +57,9 @@ async function fetchHentaiMamaCatalog(page = 1, query = '') {
       const cleanTitle = decodeHTMLEntities(rawTitle.replace(/\s*-\s*\d+$/i, '').trim());
 
       // Robust image extraction (skip data:image 1x1 lazyload placeholders)
-      const imgMatch = snippet.match(/data-lazy-src=["']([^"']+)["']/i) ||
-                       snippet.match(/data-src=["']([^"']+)["']/i) ||
+      const imgMatch = snippet.match(/<noscript><img[^>]+src=["']([^"']+)["']/i) ||
+                       snippet.match(/data-src=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i) ||
+                       snippet.match(/data-lazy-src=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i) ||
                        snippet.match(/srcset=["'](https?:\/\/[^\s"']+)["']/i) ||
                        snippet.match(/src=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i);
 

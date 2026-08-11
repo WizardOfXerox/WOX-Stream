@@ -318,9 +318,23 @@ window.saveProfileSettings = function() {
   }
 };
 
+function decodeHTMLEntitiesClient(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&nbsp;/gi, ' ');
+}
+
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
-  return String(str)
+  const decoded = decodeHTMLEntitiesClient(str);
+  return String(decoded)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -4781,7 +4795,8 @@ function saveSession(token, user) {
 
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
-  return String(str).replace(/[&<>"']/g, match => {
+  const decoded = decodeHTMLEntitiesClient(str);
+  return String(decoded).replace(/[&<>"']/g, match => {
     return {
       '&': '&amp;',
       '<': '&lt;',

@@ -114,6 +114,9 @@ function setCorsHeaders(res) {
 function fixCoverUrl(url) {
   if (!url) return '';
   let strUrl = String(url).trim();
+  if (strUrl.startsWith('data:image/') || strUrl.startsWith('data:application/') || strUrl.includes('base64,')) {
+    return '';
+  }
 
   // Recursively unwrap nested /api/image?url= proxy wrappers
   for (let iter = 0; iter < 10; iter++) {
