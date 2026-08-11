@@ -17,20 +17,18 @@ module.exports = async (req, res) => {
       return res.status(400).end('Missing stream URL or ticket');
     }
 
-    let decodedUrl = decodeURIComponent(rawUrl);
-    if (decodedUrl.includes('%25') || decodedUrl.includes('%2b') || decodedUrl.includes('%2B')) {
-      try { decodedUrl = decodeURIComponent(decodedUrl); } catch (_) {}
+    let targetUrlString = rawUrl;
+    if (typeof targetUrlString === 'string' && (targetUrlString.startsWith('http%3A') || targetUrlString.startsWith('https%3A') || targetUrlString.startsWith('http%253A') || targetUrlString.startsWith('https%253A'))) {
+      try { targetUrlString = decodeURIComponent(targetUrlString); } catch (_) {}
     }
-    const targetUrl = new URL(decodedUrl);
+    const targetUrl = new URL(targetUrlString);
     const cleanPath = targetUrl.pathname.toLowerCase();
 
-    const isNartoStream = decodedUrl.includes('narto-drama.com') || decodedUrl.includes('mydramawave.com') || decodedUrl.includes('netshort.com');
+    const isNartoStream = targetUrlString.includes('narto-drama.com') || targetUrlString.includes('mydramawave.com') || targetUrlString.includes('netshort.com');
     let customReferer = req.query.referer ? decodeURIComponent(req.query.referer) : '';
     if (!customReferer) {
       const host = targetUrl.hostname.toLowerCase();
-      if (host.includes('subplayts.com') || host.includes('loklok')) {
-        customReferer = 'https://loklok.com/';
-      } else if (host.includes('narto-drama.com') || host.includes('mydramawave.com') || host.includes('netshort.com')) {
+      if (host.includes('narto-drama.com') || host.includes('mydramawave.com') || host.includes('netshort.com')) {
         customReferer = 'https://narto-drama.com/';
       } else if (host.includes('ane-h.xyz') || host.includes('shoujo-h.org') || host.includes('hstream')) {
         customReferer = 'https://hstream.moe/';
@@ -56,7 +54,7 @@ module.exports = async (req, res) => {
       fetchHeaders['Range'] = req.headers.range;
     }
 
-    const streamResponse = await fetch(targetUrl.href, {
+    const streamResponse = await fetch(targetUrlString, {
       headers: fetchHeaders,
       redirect: 'follow'
     });
@@ -92,6 +90,11 @@ module.exports = async (req, res) => {
         let fullSegmentUrl = trimmed;
         if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
           fullSegmentUrl = trimmed.startsWith('/') ? targetUrl.origin + trimmed : baseUrl + trimmed;
+        }
+        if (targetUrl.search && !fullSegmentUrl.includes('?')) {
+          fullSegmentUrl += targetUrl.search;
+        } else if (targetUrl.search && fullSegmentUrl.includes('?')) {
+          fullSegmentUrl += '&' + targetUrl.search.substring(1);
         }
         return `/api/stream?url=${encodeURIComponent(fullSegmentUrl)}${refQuery}`;
       }).join('\n');
