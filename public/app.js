@@ -4127,6 +4127,16 @@ function toggleDeduplicationSetting(isDisabled) {
   if (searchView && searchView.style.display !== 'none') {
     executeKeywordSearch();
   }
+  const categoryView = document.getElementById('view-category');
+  if (categoryView && categoryView.style.display !== 'none') {
+    if (typeof executeCategorySearch === 'function') executeCategorySearch(true);
+  }
+  const homeView = document.getElementById('view-home');
+  if (homeView && homeView.style.display !== 'none') {
+    if (typeof _clientHomeFeedCache !== 'undefined' && _clientHomeFeedCache) {
+      renderHomeFeedData(_clientHomeFeedCache);
+    }
+  }
 }
 window.toggleDeduplicationSetting = toggleDeduplicationSetting;
 
@@ -4671,7 +4681,10 @@ function filterContentBySettings(items) {
     if (state.settings.sourceHollywood === false && (srcKey === 'hollywood' || srcKey === 'flixhq')) return false;
 
     return true;
-  });
+  const isDedupDisabled = localStorage.getItem('wox_disable_dedup') === 'true';
+  if (isDedupDisabled) {
+    return filtered;
+  }
   return deduplicateClientMediaList(filtered);
 }
 

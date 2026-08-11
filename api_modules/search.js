@@ -857,7 +857,7 @@ async function searchHandler(req, res) {
         adult: hsItems.length + hmItems.length
       };
 
-      const disableDedup = req.query.dedup === 'false' || req.query.disableDedup === 'true' || req.query.dedup === '0' || (req.body && (req.body.dedup === 'false' || req.body.disableDedup === 'true'));
+      const disableDedup = req.query.dedup === 'false' || req.query.disableDedup === 'true' || req.query.disable_dedup === 'true' || req.query.dedup === '0' || (req.body && (req.body.dedup === 'false' || req.body.disableDedup === 'true' || req.body.disable_dedup === 'true'));
 
       if (!disableDedup) {
         results = deduplicateResults(results);
@@ -1259,7 +1259,7 @@ async function searchHandler(req, res) {
         ...dramaItems
       ];
 
-      const disableDedup = req.query.dedup === 'false' || req.query.disableDedup === 'true' || req.query.dedup === '0' || (req.body && (req.body.dedup === 'false' || req.body.disableDedup === 'true'));
+      const disableDedup = req.query.dedup === 'false' || req.query.disableDedup === 'true' || req.query.disable_dedup === 'true' || req.query.dedup === '0' || (req.body && (req.body.dedup === 'false' || req.body.disableDedup === 'true' || req.body.disable_dedup === 'true'));
 
       const finalItems = disableDedup ? combinedResults : robustDeduplicate(combinedResults);
       const finalFiltered = filterAndSortCategoryResults(finalItems, filterOpts);
