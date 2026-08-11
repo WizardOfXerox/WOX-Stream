@@ -334,23 +334,23 @@
         <!-- Official Loklok Multi-Filter Category View -->
         <section id="view-category" style="display: none;">
           
-          <div class="shelf-header">
+          <!-- Unified Category Toolbar -->
+          <div class="category-toolbar">
             <h2 class="shelf-title" id="category-title">Category</h2>
-            <button class="btn btn-glass" id="collapse-btn" onclick="toggleFilterOptions()" style="font-size:0.85rem;padding:0.4rem 0.85rem;">Collapse Options 🔼</button>
+            <div class="category-toolbar-search">
+              <span class="category-search-icon">🔍</span>
+              <input type="text" id="category-search-input" class="search-input" placeholder="Search within source & category..." onkeydown="if(event.key==='Enter') triggerCategorySearch()">
+              <button class="category-search-btn" onclick="triggerCategorySearch()">Search</button>
+              <button class="category-clear-btn" id="btn-clear-category-search" onclick="clearCategorySearch()" style="display: none;">✕</button>
+            </div>
+            <button class="category-collapse-btn expanded" id="collapse-btn" onclick="toggleFilterOptions()" title="Toggle filter options">
+              <span class="collapse-icon">⚙</span>
+              <span class="collapse-text">Filters</span>
+            </button>
           </div>
 
           <!-- Multi-Filter Selection Box -->
           <div class="category-filter-box" id="filter-box">
-
-            <!-- Category / Source Filter Search Bar -->
-            <div class="category-search-container" style="margin-bottom: 1.25rem; display: flex; gap: 0.5rem; align-items: center; background: rgba(0,0,0,0.25); padding: 0.6rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
-              <div style="position: relative; flex: 1;">
-                <input type="text" id="category-search-input" class="search-input" placeholder="Search within this source & category..." onkeydown="if(event.key==='Enter') triggerCategorySearch()" style="width: 100%; padding: 0.6rem 1rem 0.6rem 2.6rem; font-size: 0.9rem; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff; outline: none; transition: border-color 0.2s;">
-                <span style="position: absolute; left: 0.85rem; top: 50%; transform: translateY(-50%); opacity: 0.6; font-size: 1rem;">🔍</span>
-              </div>
-              <button class="btn btn-primary" onclick="triggerCategorySearch()" style="padding: 0.6rem 1.2rem; font-weight: 700; border-radius: 8px; font-size: 0.85rem; background: linear-gradient(135deg, #06b6d4, #3b82f6); border: none; color: #fff; cursor: pointer;">Search Source</button>
-              <button class="btn btn-glass" id="btn-clear-category-search" onclick="clearCategorySearch()" style="display: none; padding: 0.6rem 0.85rem; border-radius: 8px; font-size: 0.85rem; border: 1px solid rgba(255,255,255,0.2); color: rgba(255,255,255,0.8); cursor: pointer;">Clear ✕</button>
-            </div>
 
             <div class="filter-row-group">
 

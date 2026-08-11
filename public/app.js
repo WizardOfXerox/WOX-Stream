@@ -167,10 +167,10 @@ window.toggleFilterOptions = function() {
   const btn = document.getElementById('collapse-btn');
   if (box.style.display === 'none') {
     box.style.display = 'block';
-    btn.innerText = 'Collapse options ^';
+    btn.classList.add('expanded');
   } else {
     box.style.display = 'none';
-    btn.innerText = 'Expand options v';
+    btn.classList.remove('expanded');
   }
 };
 
@@ -4286,13 +4286,21 @@ function updatePillState(groupId, targetVal) {
   const group = document.getElementById(groupId);
   if (!group) return;
   const pills = group.querySelectorAll('.filter-pill');
+  let foundMatch = false;
   pills.forEach(p => {
     if (p.getAttribute('data-val') === targetVal) {
       p.classList.add('active');
+      foundMatch = true;
     } else {
       p.classList.remove('active');
     }
   });
+  // If no exact pill match found and a value IS set, activate the "ALL" pill
+  // so the row always has a visible active state
+  if (!foundMatch) {
+    const allPill = group.querySelector('.filter-pill[data-val=""]');
+    if (allPill) allPill.classList.add('active');
+  }
 }
 
 state.filters = state.filters || {};

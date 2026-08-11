@@ -783,8 +783,138 @@ input[type="search"]::-webkit-search-results-decoration {
 /* ══════════════════════════════════════════
    CATEGORY FILTER PILLS — Terminal Chips
    ══════════════════════════════════════════ */
+/* ── Category Toolbar (Title + Search + Filter Toggle) ── */
+.category-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  background: rgba(8, 12, 21, 0.85);
+  border: 1px solid var(--border-glass);
+  border-radius: 14px;
+  backdrop-filter: blur(16px);
+}
+
+.category-toolbar .shelf-title {
+  flex-shrink: 0;
+  margin: 0;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.category-toolbar-search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  position: relative;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.category-toolbar-search:focus-within {
+  border-color: rgba(0, 179, 255, 0.5);
+  box-shadow: 0 0 12px rgba(0, 179, 255, 0.15);
+}
+
+.category-search-icon {
+  padding: 0 0.3rem 0 0.75rem;
+  font-size: 0.85rem;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.category-toolbar-search .search-input {
+  flex: 1;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  color: #fff;
+  font-size: 0.85rem;
+  padding: 0.55rem 0.5rem;
+  min-width: 0;
+}
+
+.category-toolbar-search .search-input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.82rem;
+}
+
+.category-search-btn {
+  flex-shrink: 0;
+  padding: 0.55rem 1rem;
+  background: linear-gradient(135deg, #06b6d4, #3b82f6);
+  border: none;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: opacity 0.2s ease;
+}
+
+.category-search-btn:hover {
+  opacity: 0.85;
+}
+
+.category-clear-btn {
+  flex-shrink: 0;
+  padding: 0.55rem 0.65rem;
+  background: rgba(239, 68, 68, 0.15);
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f87171;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.category-clear-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+.category-collapse-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  background: rgba(0, 255, 255, 0.06);
+  border: 1px solid rgba(0, 255, 255, 0.2);
+  border-radius: 10px;
+  color: var(--neon-cyan);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.25s ease;
+}
+
+.category-collapse-btn:hover {
+  background: rgba(0, 255, 255, 0.12);
+  border-color: rgba(0, 255, 255, 0.4);
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.15);
+}
+
+.category-collapse-btn .collapse-icon {
+  display: inline-block;
+  transition: transform 0.3s ease;
+  font-size: 0.95rem;
+}
+
+.category-collapse-btn.expanded .collapse-icon {
+  transform: rotate(90deg);
+}
+
 .category-filter-box {
-  margin-top: 1rem;
+  margin-top: 0;
   margin-bottom: 1.5rem;
 }
 
@@ -1646,6 +1776,44 @@ input[type="search"]::-webkit-search-results-decoration {
     grid-template-columns: repeat(3, 1fr) !important;
     gap: 0.65rem 0.45rem !important;
     padding: 0 !important;
+  }
+
+
+  .category-toolbar {
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+    padding: 0.5rem 0.6rem !important;
+    border-radius: 10px !important;
+  }
+
+  .category-toolbar .shelf-title {
+    font-size: 0.85rem !important;
+  }
+
+  .category-toolbar-search {
+    order: 3 !important;
+    flex: 1 1 100% !important;
+    border-radius: 8px !important;
+  }
+
+  .category-toolbar-search .search-input {
+    font-size: 0.8rem !important;
+    padding: 0.5rem 0.4rem !important;
+  }
+
+  .category-search-btn {
+    font-size: 0.72rem !important;
+    padding: 0.5rem 0.7rem !important;
+  }
+
+  .category-collapse-btn {
+    padding: 0.4rem 0.6rem !important;
+    border-radius: 8px !important;
+    margin-left: auto !important;
+  }
+
+  .category-collapse-btn .collapse-text {
+    display: none !important;
   }
 
   .category-filter-box {
