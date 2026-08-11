@@ -4681,6 +4681,7 @@ function filterContentBySettings(items) {
     if (state.settings.sourceHollywood === false && (srcKey === 'hollywood' || srcKey === 'flixhq')) return false;
 
     return true;
+  });
   const isDedupDisabled = localStorage.getItem('wox_disable_dedup') === 'true';
   if (isDedupDisabled) {
     return filtered;
@@ -4819,7 +4820,7 @@ window.handleSearchKeyUp = function(e) {
       dropdown.innerHTML = results.slice(0, 6).map(item => {
         const cleanTitle = String(item.title || '').replace(/^\[narto\]\s*/i, '').trim();
         return `
-          <div class="search-suggestion-item" onclick="openDetailModal('${item.id}', '${item.category || 1}'); document.getElementById('search-suggestions-dropdown').style.display='none';" style="display:flex; align-items:center; gap:0.85rem; padding:0.65rem 1rem; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(0,255,255,0.08)'" onmouseout="this.style.background='transparent'">
+          <div class="search-suggestion-item" onclick="openDetailModal('${item.id}', '${item.category !== undefined && item.category !== null ? item.category : 1}'); document.getElementById('search-suggestions-dropdown').style.display='none';" style="display:flex; align-items:center; gap:0.85rem; padding:0.65rem 1rem; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(0,255,255,0.08)'" onmouseout="this.style.background='transparent'">
             <img src="${item.cover}" style="width:44px;height:60px;object-fit:cover;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.6);" onerror="handleImgError(this)">
             <div style="flex:1;min-width:0;">
               <div style="font-weight:700;font-size:1.05rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;">${escapeHtml(cleanTitle)}</div>

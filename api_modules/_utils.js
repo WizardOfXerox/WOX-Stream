@@ -60,6 +60,9 @@ const GUEST_DEVICE_ID = '60A3305FDAAC489AAF4C7DD33B1483B4';
 function getLoklokHeaders(token = '') {
   const cleanToken = sanitizeToken(token);
   const pool = [
+    '202.138.240.1',
+    '118.107.192.1',
+    '1.46.0.1',
     `171.96.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
     `171.97.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
     `120.28.${Math.floor(Math.random()*254)+1}.${Math.floor(Math.random()*254)+1}`,
