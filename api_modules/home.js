@@ -1,4 +1,9 @@
 const { getLoklokHeaders, setCorsHeaders, fixCoverUrl, loklokFetch, maskId, robustDeduplicate } = require('./_utils');
+const { h5ApiSearch } = require('./search');
+
+// In-Memory RAM Cache for Home Sections (60s TTL)
+const homeCache = new Map();
+const HOME_CACHE_TTL = 60 * 1000;
 
 module.exports = async (req, res) => {
   setCorsHeaders(res);
@@ -7,206 +12,192 @@ module.exports = async (req, res) => {
   try {
     const page = req.query.page || 0;
     const token = req.headers.token || req.query.token || '';
+    const allowAdultParam = req.query.allowAdult || (req.headers ? req.headers.allowadult : '') || '';
+    const cacheKey = `home_${page}_${allowAdultParam === 'true' ? 'adult' : 'safe'}_${req.query.source || 'all'}`;
+
+    // Return from memory cache if fresh (< 60 seconds)
+    const cached = homeCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < HOME_CACHE_TTL)) {
+      res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
+      return res.status(200).json(cached.data);
+    }
+
+    const resultSections = [];
     const headers = getLoklokHeaders(token);
 
-    const data = await loklokFetch(`/homePage/getHome?page=${page}`, { headers });
-    
-    if ((data.code !== '00000' && data.code !== '000000') || !data.data) {
-      console.warn('Loklok homePage/getHome endpoint error code:', data.code);
-    }
-
-    const recommendItems = (data && data.data && data.data.recommendItems) ? data.data.recommendItems : [];
-    const resultSections = [];
-
-    // Categories to skip if returned as home shortcuts
-    const skipCategories = ['global', 'shorts', 'anime', 'movie', 'k-drama', 'western', 'horror', 'animated film', 'thai', 'hot variety show'];
-
-    for (const section of recommendItems) {
-      const sectionName = section.homeSectionName || 'Recommendations';
-      const sectionType = section.homeSectionType || '';
-      
-      // Skip Banners, Category Blocks, and Top Picks category shortcuts
-      if (
-        sectionType === 'BANNER' ||
-        sectionType === 'BLOCK_GROUP' ||
-        sectionType === 'CATEGORY_ENTER' ||
-        sectionType === 'CATEGORY_GROUP' ||
-        sectionName.toLowerCase().includes('top picks')
-      ) {
-        continue;
-      }
-
-      const rawMedia = section.media || section.recommendContentVOList || [];
-      const items = rawMedia.map(item => {
-        const id = item.jumpAddress ? (item.jumpAddress.match(/id=([^&]+)/) || [])[1] || item.id : item.id;
-        const category = (item.category !== undefined && item.category !== null) ? String(item.category) : (item.domainType || '1');
-        const title = item.title || item.name || item.videoName || 'Untitled';
-        const coverRaw = item.coverVerticalUrl || item.imageUrl || item.cover || '';
-        const cover = fixCoverUrl(coverRaw);
-
-        return {
-          id: maskId('loklok', id),
-          category: String(category),
-          title: title,
-          cover: cover,
-          score: item.score || null,
-          domainType: item.domainType
-        };
-      }).filter(item => {
-        if (!item.id || !item.title) return false;
-        if (skipCategories.includes(item.title.toLowerCase())) return false;
-        return true;
+    // 1. Fetch Official Loklok App Home Recommendations & Shelves
+    try {
+      const getHomeRes = await fetch('https://ga-mobile-api.loklok.tv/cms/app/homePage/getHome', {
+        headers,
+        signal: AbortSignal.timeout(5000)
       });
+      if (getHomeRes.ok) {
+        const homeData = await getHomeRes.json();
+        if (homeData && homeData.data && Array.isArray(homeData.data.recommendItems)) {
+          homeData.data.recommendItems.forEach((shelf, idx) => {
+            if (shelf && Array.isArray(shelf.recommendContentVOList) && shelf.recommendContentVOList.length > 0) {
+              const validItems = shelf.recommendContentVOList.map(item => {
+                if (!item || (!item.id && !item.jumpAddress)) return null;
+                const title = item.title || item.name || '';
+                if (!title || title.toLowerCase() === 'global' || title.toLowerCase() === 'shorts' || title.toLowerCase() === 'anime') return null;
+                let realMediaId = item.id;
+                let realCat = item.category !== null && item.category !== undefined ? item.category : '1';
 
-      const dedupedItems = robustDeduplicate(items);
+                if (item.jumpAddress && typeof item.jumpAddress === 'string') {
+                  const idMatch = item.jumpAddress.match(/id=(\d+)/i);
+                  const typeMatch = item.jumpAddress.match(/type=(\d+)/i);
+                  if (idMatch) realMediaId = idMatch[1];
+                  if (typeMatch) realCat = typeMatch[1];
+                }
 
-      if (dedupedItems.length > 0) {
-        resultSections.push({
-          title: sectionName,
-          type: sectionType,
-          items: dedupedItems
-        });
-      }
-    }
+                if (!realMediaId) return null;
 
-    // If Loklok home endpoint returned 0 Loklok items (e.g. cloud hosting IP restrictions), populate from Loklok catalog search
-    if (resultSections.length === 0) {
-      try {
-        const searchRes = await loklokFetch('/search/v1/search', {
-          method: 'POST',
-          headers: { ...headers, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ size: 24, params: 'MOVIE,TV,VARIETY,COMIC,DOCUMENTARY', area: '', category: '', year: '', order: 'count', sort: '' })
-        });
-        const searchResults = (searchRes && searchRes.data && Array.isArray(searchRes.data.searchResults)) ? searchRes.data.searchResults : [];
+                const coverRaw = item.imageUrl || item.coverVerticalUrl || item.coverHorizontalUrl || item.cover || '';
+                return {
+                  id: maskId('loklok', realMediaId),
+                  category: String(realCat),
+                  title,
+                  cover: fixCoverUrl(coverRaw),
+                  backdrop: fixCoverUrl(item.coverHorizontalUrl || coverRaw),
+                  score: item.score ? String(item.score) : '8.8',
+                  domainType: String(realCat) === '0' ? 'MOVIE' : 'TV',
+                  sourceName: 'Loklok HD',
+                  sourceKey: 'loklok'
+                };
+              }).filter(Boolean);
 
-        if (searchResults.length > 0) {
-          const loklokItems = searchResults.map(item => ({
-            id: maskId('loklok', item.id),
-            category: String(item.category || item.domainType || '1'),
-            title: item.title || item.name || item.videoName || 'Untitled',
-            cover: fixCoverUrl(item.coverVerticalUrl || item.imageUrl || item.cover || ''),
-            score: item.score || null,
-            domainType: item.domainType
-          }));
-
-          const dedupedLoklok = robustDeduplicate(loklokItems);
-
-          resultSections.unshift({
-            title: '🔥 TRENDING MOVIES & SHOWS',
-            type: 'SINGLE_ALBUM',
-            items: dedupedLoklok.slice(0, 12)
-          });
-          resultSections.unshift({
-            title: '✨ POPULAR RELEASES',
-            type: 'SINGLE_ALBUM',
-            items: dedupedLoklok.slice(12, 24)
+              if (validItems.length > 0) {
+                const rawTitle = shelf.homeSectionName || shelf.title;
+                const shelfTitle = rawTitle ? rawTitle.toUpperCase() : (idx === 0 ? '🔥 TRENDING LOKLOK PREMIERES' : `LOKLOK FEATURED SELECTION ${idx}`);
+                resultSections.push({
+                  title: shelfTitle,
+                  type: 'LOKLOK_SHELF',
+                  items: robustDeduplicate(validItems).slice(0, 18)
+                });
+              }
+            }
           });
         }
-      } catch (err) {
-        console.error('Search fallback error on home:', err.message);
       }
-    }
+    } catch (_) {}
 
-    // Concurrently fetch multi-source shelves (Asian Short Dramas, Classics, Adult Anime)
-    const allowAdultParam = req.query.allowAdult || (req.headers ? req.headers.allowadult : '') || '';
+    // 2. Fetch Multi-Source Hollywood Shelves
+    try {
+      const hollywoodModule = require('./hollywood');
+      const hwShelves = await hollywoodModule.fetchHollywoodShelves();
+      if (Array.isArray(hwShelves) && hwShelves.length > 0) {
+        hwShelves.forEach(shelf => {
+          if (shelf && shelf.items && shelf.items.length > 0) {
+            resultSections.push({
+              title: shelf.title || '🌟 HOLLYWOOD CINEMA & SERIES',
+              type: 'HOLLYWOOD_SHELF',
+              items: robustDeduplicate(shelf.items).slice(0, 18)
+            });
+          }
+        });
+      }
+    } catch (_) {}
 
-    const extraTasks = [];
-
-    // Timeout helper for extra tasks (max 3.5 seconds)
-    const withTimeout = (promise, ms = 3500) => {
-      return Promise.race([
-        promise,
-        new Promise(resolve => setTimeout(() => resolve(null), ms))
-      ]);
-    };
-
-    // Task 1: Asian Dramas (Narto)
-    extraTasks.push(withTimeout((async () => {
-      try {
-        const nartoFetch = require('./narto');
-        let nartoItems = [];
-        const nartoReq = { url: '/catalog', query: { q: '' } };
-        const nartoRes = {
-          status: function() { return this; },
-          json: function(data) { if (data && data.items) nartoItems = data.items; }
-        };
-        await nartoFetch(nartoReq, nartoRes);
-
-        if (nartoItems.length > 0) {
-          const formatted = nartoItems.map(nItem => ({
-            id: maskId('narto', nItem.id),
+    // 3. Fetch Asian Short Dramas (Narto)
+    try {
+      const nartoFetch = require('./narto');
+      let nartoItems = [];
+      const nartoReq = { url: '/catalog', query: { q: 'billionaire' } };
+      const nartoRes = {
+        status: function() { return this; },
+        json: function(data) { if (data && Array.isArray(data.items)) nartoItems = data.items; }
+      };
+      await nartoFetch(nartoReq, nartoRes);
+      if (nartoItems.length > 0) {
+        resultSections.push({
+          title: '💎 ASIAN SHORT DRAMAS (BILLIONAIRE & REVENGE)',
+          type: 'NARTO_SHELF',
+          items: robustDeduplicate(nartoItems.map(nItem => ({
+            id: maskId('narto', nItem.slug || nItem.id),
             category: '1',
-            title: String(nItem.title || '').replace(/^\[narto\]\s*/i, '').trim(),
+            title: (nItem.title || '').replace(/^\[narto\]\s*/i, '').trim(),
             cover: nItem.cover,
-            score: '9.0',
+            score: '9.2',
             domainType: 'SHORT',
-            sourceName: 'WOX Stream',
+            sourceName: 'Narto Drama',
+            sourceKey: 'narto',
             isNarto: true
-          }));
-          const dedupedNarto = robustDeduplicate(formatted).slice(0, 12);
-          return { title: '🔥 POPULAR ASIAN SHORT DRAMAS', type: 'NARTO_SECTION', items: dedupedNarto };
+          }))).slice(0, 18)
+        });
+      }
+    } catch (_) {}
+
+    // 4. Ultra-rich COMING SOON & UPCOMING RELEASES shelf
+    const upcomingList = [
+      { id: maskId('hollywood', 'm_671'), category: '0', title: "Harry Potter and the Philosopher's Stone (4K Remaster)", cover: fixCoverUrl('https://image.tmdb.org/t/p/w500/wuMc08IPKEatf9rnMNXvIDxqP4W.jpg'), score: '9.5', releaseDate: 'Coming Dec 2026', domainType: 'MOVIE', sourceName: 'Upcoming Premiere', sourceKey: 'upcoming' },
+      { id: maskId('anime', 'sakamoto_days_s1'), category: '1', title: 'Sakamoto Days (Season 1)', cover: fixCoverUrl('https://image.tmdb.org/t/p/w500/wRpCqsJFyKNuh5FMegNPrhzp2NF.jpg'), score: '9.2', releaseDate: 'Coming Jan 2026', domainType: 'TV', sourceName: 'Upcoming Premiere', sourceKey: 'upcoming' },
+      { id: maskId('anime', 'solo_leveling_s2'), category: '1', title: 'Solo Leveling Season 2: Arise from the Shadow', cover: fixCoverUrl('https://image.tmdb.org/t/p/w500/geCRueV3ElhRTr0xtJuEWJt6dJ1.jpg'), score: '9.8', releaseDate: 'Coming Jan 2026', domainType: 'TV', sourceName: 'Upcoming Premiere', sourceKey: 'upcoming' },
+      { id: maskId('hollywood', 't_66732'), category: '1', title: 'Stranger Things Season 5 (The Final Season)', cover: fixCoverUrl('https://image.tmdb.org/t/p/w500/uOOtwVbSr4QDjAGIifLDwpb2Pdl.jpg'), score: '9.7', releaseDate: 'Coming Nov 2026', domainType: 'TV', sourceName: 'Upcoming Premiere', sourceKey: 'upcoming' },
+      { id: maskId('anime', 'demon_slayer_movie_infinity'), category: '0', title: 'Demon Slayer: Infinity Castle Movie Trilogy', cover: fixCoverUrl('https://image.tmdb.org/t/p/w500/fWVSwgjpT2D78VUh6X8UBd2rorW.jpg'), score: '9.9', releaseDate: 'Coming 2026', domainType: 'MOVIE', sourceName: 'Upcoming Premiere', sourceKey: 'upcoming' },
+      { id: maskId('hollywood', 't_93405'), category: '1', title: 'Squid Game Season 3', cover: fixCoverUrl('https://image.tmdb.org/t/p/w500/1QdXdRYfktUSONkl1oD5gc6Be0s.jpg'), score: '9.1', releaseDate: 'Coming Dec 2026', domainType: 'TV', sourceName: 'Upcoming Premiere', sourceKey: 'upcoming' },
+      { id: maskId('anime', 'chainsaw_man_reze'), category: '0', title: 'Chainsaw Man The Movie: Reze Arc', cover: fixCoverUrl('https://image.tmdb.org/t/p/w500/iFM1dyFi0rByvEomEkmm7NpQeeb.jpg'), score: '9.5', releaseDate: 'Coming 2026', domainType: 'MOVIE', sourceName: 'Upcoming Premiere', sourceKey: 'upcoming' },
+      { id: maskId('hollywood', 'm_569094'), category: '0', title: 'Spider-Man: Beyond the Spider-Verse', cover: fixCoverUrl('https://image.tmdb.org/t/p/w500/9KAe39xqyZnv9J4W3DRGdQqX82h.jpg'), score: '9.8', releaseDate: 'Coming 2026', domainType: 'MOVIE', sourceName: 'Upcoming Premiere', sourceKey: 'upcoming' },
+      { id: maskId('hollywood', 'm_83533'), category: '0', title: 'Avatar 3: Fire and Ash', cover: fixCoverUrl('https://image.tmdb.org/t/p/w500/bRBeSHfGHwkEpImlhxPmOcUsaeg.jpg'), score: '9.4', releaseDate: 'Coming Dec 2026', domainType: 'MOVIE', sourceName: 'Upcoming Premiere', sourceKey: 'upcoming' },
+      { id: maskId('hollywood', 'm_1003596'), category: '0', title: 'Avengers: Doomsday', cover: fixCoverUrl('https://image.tmdb.org/t/p/w500/bh2OuKvq19jBHsloUVCfPSZZw81.jpg'), score: '9.9', releaseDate: 'Coming May 2026', domainType: 'MOVIE', sourceName: 'Upcoming Premiere', sourceKey: 'upcoming' }
+    ];
+
+    resultSections.splice(2, 0, {
+      title: '⏳ COMING SOON & UPCOMING RELEASES',
+      type: 'COMING_SOON_SECTION',
+      items: upcomingList
+    });
+
+    // 5. Adult Anime (if allowAdult === 'true')
+    if (allowAdultParam === 'true') {
+      try {
+        const hstreamModule = require('./hstream');
+        const hmamaModule = require('./hentaimama');
+        const [hsItems, hmItems] = await Promise.all([
+          hstreamModule.fetchHstreamCatalog(1, 'view-count', ''),
+          hmamaModule.fetchHentaiMamaCatalog(1, '')
+        ]);
+
+        const combined = [];
+        if (hsItems && hsItems.length > 0) combined.push(...hsItems.slice(0, 6));
+        if (hmItems && hmItems.length > 0) combined.push(...hmItems.slice(0, 6));
+
+        const dedupedAdult = robustDeduplicate(combined);
+        if (dedupedAdult.length > 0) {
+          resultSections.push({ title: '🔞 TRENDING ADULT ANIME (18+)', type: 'ADULT_SECTION', items: dedupedAdult });
         }
       } catch (_) {}
-      return null;
-    })()));
-
-    // Task 2: Classics Archive (Only if explicitly requested)
-    if (req.query.source === 'classics') {
-      extraTasks.push(withTimeout((async () => {
-        try {
-          const classicsModule = require('./classics');
-          const classicsRes = await classicsModule.fetchClassicsShelves();
-          if (classicsRes && classicsRes.shelves && Array.isArray(classicsRes.shelves)) {
-            return classicsRes.shelves.map(s => ({
-              ...s,
-              items: robustDeduplicate(s.items)
-            })).filter(s => s.items && s.items.length > 0);
-          }
-        } catch (_) {}
-        return null;
-      })()));
     }
 
-    // Task 3: Adult Anime (if allowAdult === 'true')
-    if (allowAdultParam === 'true') {
-      extraTasks.push(withTimeout((async () => {
-        try {
-          const hstreamModule = require('./hstream');
-          const hmamaModule = require('./hentaimama');
-          const [hsItems, hmItems] = await Promise.all([
-            hstreamModule.fetchHstreamCatalog(1, 'view-count', ''),
-            hmamaModule.fetchHentaiMamaCatalog(1, '')
-          ]);
+    // Build featured Banners from the top items of the shelves
+    const allShelvesItems = resultSections.flatMap(s => s.items || []);
+    const bannerPool = robustDeduplicate(allShelvesItems).slice(0, 10);
+    const banners = bannerPool.map((item, idx) => ({
+      id: item.id,
+      category: item.category || '0',
+      title: item.title,
+      cover: item.cover,
+      backdrop: item.backdrop || item.cover,
+      score: item.score || '9.0',
+      description: item.description || 'Watch now in Ultra HD with multi-language audio and subtitle support.',
+      rank: idx + 1
+    }));
 
-          const combined = [];
-          if (hsItems && hsItems.length > 0) combined.push(...hsItems.slice(0, 6));
-          if (hmItems && hmItems.length > 0) combined.push(...hmItems.slice(0, 6));
-
-          const dedupedAdult = robustDeduplicate(combined);
-
-          if (dedupedAdult.length > 0) {
-            return { title: '🔞 TRENDING ADULT ANIME (18+)', type: 'ADULT_SECTION', items: dedupedAdult };
-          }
-        } catch (_) {}
-        return null;
-      })()));
-    }
-
-    const settled = await Promise.allSettled(extraTasks);
-    settled.forEach(res => {
-      if (res.status === 'fulfilled' && res.value) {
-        if (Array.isArray(res.value)) {
-          res.value.forEach(s => { if (s && s.items && s.items.length > 0) resultSections.push(s); });
-        } else if (res.value.items && res.value.items.length > 0) {
-          resultSections.push(res.value);
-        }
-      }
-    });
-
-    return res.status(200).json({
+    const responsePayload = {
       success: true,
-      sections: resultSections
-    });
+      sections: resultSections,
+      shelves: resultSections,
+      banners: banners
+    };
+
+    // Save to Memory Cache
+    homeCache.set(cacheKey, { timestamp: Date.now(), data: responsePayload });
+    if (homeCache.size > 20) {
+      const oldestKey = homeCache.keys().next().value;
+      homeCache.delete(oldestKey);
+    }
+
+    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
+    return res.status(200).json(responsePayload);
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

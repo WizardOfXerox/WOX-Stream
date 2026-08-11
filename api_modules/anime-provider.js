@@ -198,12 +198,20 @@ async function getAnimeDetail(maskedId) {
             }
         }
 
-        const jikanRes = await fetch(`https://api.jikan.moe/v4/anime/${malId}/full`);
-        if (!jikanRes.ok) throw new Error('Jikan API error');
-        const jikanData = await jikanRes.json();
-        const anime = jikanData.data;
-
-        let episodesCount = anime.episodes || 0;
+        let episodesCount = 24;
+        let anime = { title: 'Anime' };
+        try {
+            const jikanRes = await fetch(`https://api.jikan.moe/v4/anime/${malId}/full`);
+            if (jikanRes.ok) {
+                const jikanData = await jikanRes.json();
+                if (jikanData && jikanData.data) {
+                    anime = jikanData.data;
+                    if (anime.episodes) episodesCount = anime.episodes;
+                }
+            }
+        } catch (e) {
+            console.warn('[Anime Provider] Jikan API fallback used:', e.message);
+        }
         
         let episodes = [];
         for (let i = 1; i <= episodesCount; i++) {

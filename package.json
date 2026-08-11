@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
+    "better-sqlite3": "^11.0.0",
     "https-proxy-agent": "^9.1.0",
     "node-fetch": "^2.7.0",
     "pg": "^8.23.0",

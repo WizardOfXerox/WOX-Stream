@@ -31,7 +31,7 @@ async function fetchHentaiMamaCatalog(page = 1, query = '') {
       const cover = match[2];
       const rawTitle = match[3].replace(/<[^>]+>/g, '').trim();
 
-      const slugMatch = href.match(/\/(?:tvshows|hentai)\/([^/?#]+)/);
+      const slugMatch = href.match(/\/(?:tvshows|hentai|episodes)\/([^/?#]+)/);
       if (!slugMatch) continue;
       const targetSlug = slugMatch[1].trim('/');
 
@@ -83,15 +83,17 @@ async function getHentaiMamaDetail(id) {
     const cover = imgMatch ? imgMatch[1] : '';
 
     // Episodes
-    const epRegex = /<div class="season_m">[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>[\s\S]*?<span class="c">([\s\S]*?)<\/span>/gi;
+    const epRegex = /<a[^>]+href="([^"]*\/episodes\/[^"]+)"[^>]*>/gi;
     let epMatch;
     const episodes = [];
+    const seenEps = new Set();
 
     while ((epMatch = epRegex.exec(html)) !== null) {
       const epHref = epMatch[1];
-      const epText = epMatch[2].replace(/<[^>]+>/g, '').trim();
+      if (seenEps.has(epHref)) continue;
+      seenEps.add(epHref);
 
-      const epNumMatch = epText.match(/(\d+\.?\d*)/);
+      const epNumMatch = epHref.match(/episode-(\d+\.?\d*)/i);
       const epNum = epNumMatch ? parseFloat(epNumMatch[1]) : (episodes.length + 1);
 
       episodes.push({
@@ -105,7 +107,7 @@ async function getHentaiMamaDetail(id) {
 
     if (episodes.length === 0) {
       episodes.push({
-        id: `/hentai/${rawSlug}/`,
+        id: `/episodes/${rawSlug}-episode-1/`,
         name: 'Episode 1',
         episodeNumber: 1,
         definitions: ['HD', '720P'],
@@ -134,74 +136,90 @@ async function getHentaiMamaDetail(id) {
 
 async function getHentaiMamaPlayUrl(epPath) {
   try {
-    const fullUrl = epPath.startsWith('http') ? epPath : `${BASE_URL}${epPath}`;
+    let cleanPath = epPath.startsWith('http') ? epPath.replace(/^https?:\/\/[^/]+/, '') : epPath;
+    if (!cleanPath.startsWith('/episodes/')) {
+      const slug = cleanPath.replace(/^\/(?:hentai|tvshows)\//, '').replace(/\/$/, '');
+      cleanPath = `/episodes/${slug}-episode-1/`;
+    }
+
+    const fullUrl = `${BASE_URL}${cleanPath}`;
     const pageRes = await fetch(fullUrl, { headers: HEADERS });
     if (!pageRes.ok) return null;
     const html = await pageRes.text();
 
-    let iframeUrl = '';
-    const actionMatch = html.match(/action:\s*['"]get_player_contents['"][\s\S]*?a:\s*['"]?(\d+)['"]?/i);
-    const actionVal = actionMatch ? actionMatch[1] : '';
+    let directMp4 = '';
 
-    if (actionVal) {
-      try {
-        const params = new URLSearchParams();
-        params.append('action', 'get_player_contents');
-        params.append('a', actionVal);
+    // Step 1: Query admin-ajax.php using idpost parameter
+    const idpostMatch = html.match(/name=["']idpost["'][^>]*value=["']([^"']+)["']/i) ||
+                        html.match(/value=["']([^"']+)["'][^>]*name=["']idpost["']/i);
 
-        const ajaxRes = await fetch(`${BASE_URL}/wp-admin/admin-ajax.php`, {
-          method: 'POST',
-          headers: {
-            ...HEADERS,
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            'X-Requested-With': 'XMLHttpRequest',
-            'Referer': fullUrl,
-            'Origin': BASE_URL
-          },
-          body: params.toString()
-        });
+    if (idpostMatch) {
+      const params = new URLSearchParams();
+      params.append('action', 'get_player_contents');
+      params.append('a', idpostMatch[1]);
 
-        if (ajaxRes.ok) {
-          const ajaxJson = await ajaxRes.json();
-          if (Array.isArray(ajaxJson) && ajaxJson.length > 0) {
-            for (const field of ajaxJson) {
-              const match = field.match(/src=["']([^"']+)["']/i);
-              if (match) {
-                iframeUrl = match[1];
-                break;
+      const ajaxRes = await fetch(`${BASE_URL}/wp-admin/admin-ajax.php`, {
+        method: 'POST',
+        headers: {
+          ...HEADERS,
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'X-Requested-With': 'XMLHttpRequest',
+          'Referer': fullUrl,
+          'Origin': BASE_URL
+        },
+        body: params.toString()
+      });
+
+      if (ajaxRes.ok) {
+        const ajaxData = await ajaxRes.json();
+        if (Array.isArray(ajaxData) && ajaxData.length > 0) {
+          for (const embedItem of ajaxData) {
+            const srcMatch = embedItem.match(/src=["']([^"']+)["']/i);
+            if (srcMatch) {
+              let iframeUrl = srcMatch[1];
+              if (iframeUrl.startsWith('//')) iframeUrl = 'https:' + iframeUrl;
+
+              // Fetch inner player php HTML to extract direct MP4 link
+              const iframeRes = await fetch(iframeUrl, { headers: { ...HEADERS, 'Referer': fullUrl } });
+              if (iframeRes.ok) {
+                const iframeHtml = await iframeRes.text();
+                const mp4Match = iframeHtml.match(/(https?:[^\s"']+\.mp4[^\s"']*)/i) ||
+                                 iframeHtml.match(/file:\s*["']([^"']+\.mp4[^"']*)["']/i) ||
+                                 iframeHtml.match(/<source[^>]+src=["']([^"']+)["']/i);
+                if (mp4Match) {
+                  directMp4 = mp4Match[1];
+                  break;
+                }
               }
             }
           }
         }
-      } catch (_) {}
+      }
     }
 
-    if (!iframeUrl) {
+    // Step 2: Fallback to HTML player containers if AJAX endpoint returned null
+    if (!directMp4) {
       const fallbackIframe = html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
-      if (fallbackIframe) iframeUrl = fallbackIframe[1];
+      if (fallbackIframe) {
+        let iframeUrl = fallbackIframe[1];
+        if (iframeUrl.startsWith('//')) iframeUrl = 'https:' + iframeUrl;
+        const iframeRes = await fetch(iframeUrl, { headers: { ...HEADERS, 'Referer': fullUrl } });
+        if (iframeRes.ok) {
+          const iframeHtml = await iframeRes.text();
+          const mp4Match = iframeHtml.match(/(https?:[^\s"']+\.mp4[^\s"']*)/i);
+          if (mp4Match) directMp4 = mp4Match[1];
+        }
+      }
     }
 
-    if (!iframeUrl) return null;
-
-    if (iframeUrl.startsWith('//')) iframeUrl = 'https:' + iframeUrl;
-    iframeUrl = iframeUrl.replace(/\\\//g, '/');
-
-    const iframeRes = await fetch(iframeUrl, {
-      headers: { ...HEADERS, 'Referer': fullUrl }
-    });
-
-    if (!iframeRes.ok) return null;
-    const iframeHtml = await iframeRes.text();
-
-    const mp4Match = iframeHtml.match(/file:\s*["']([^"']+\.(?:mp4|m3u8)[^"']*)["']/i) || 
-                     iframeHtml.match(/(https?:[^\s"']+\.(?:mp4|m3u8)[^\s"']*)/i) || 
-                     iframeHtml.match(/<source[^>]+src=["']([^"']+)["']/i);
-
-    if (!mp4Match) return null;
+    if (!directMp4) return null;
 
     return {
-      playUrl: mp4Match[1],
-      format: 'mp4',
+      success: true,
+      playUrl: directMp4,
+      mediaUrl: directMp4,
+      streamUrl: directMp4,
+      streamType: 'mp4',
       subtitles: []
     };
   } catch (err) {

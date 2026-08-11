@@ -25,14 +25,31 @@ module.exports = async (req, res) => {
     const cleanPath = targetUrl.pathname.toLowerCase();
 
     const isNartoStream = decodedUrl.includes('narto-drama.com') || decodedUrl.includes('mydramawave.com') || decodedUrl.includes('netshort.com');
+    let customReferer = req.query.referer ? decodeURIComponent(req.query.referer) : '';
+    if (!customReferer) {
+      const host = targetUrl.hostname.toLowerCase();
+      if (host.includes('subplayts.com') || host.includes('loklok')) {
+        customReferer = 'https://loklok.com/';
+      } else if (host.includes('narto-drama.com') || host.includes('mydramawave.com') || host.includes('netshort.com')) {
+        customReferer = 'https://narto-drama.com/';
+      } else if (host.includes('ane-h.xyz') || host.includes('shoujo-h.org') || host.includes('hstream')) {
+        customReferer = 'https://hstream.moe/';
+      } else if (host.includes('gdvid.info') || host.includes('hentaimama')) {
+        customReferer = 'https://hentaimama.io/';
+      } else if (host.includes('vidsrc') || host.includes('cloudorchestranova') || host.includes('comityofcognomen')) {
+        customReferer = 'https://cloudorchestranova.com/';
+      }
+    }
+
     const fetchHeaders = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
       'Accept': '*/*',
       'Accept-Language': 'en-US,en;q=0.9'
     };
 
-    if (isNartoStream) {
-      fetchHeaders['Referer'] = 'https://narto-drama.com/';
+    if (customReferer) {
+      fetchHeaders['Referer'] = customReferer;
+      try { fetchHeaders['Origin'] = new URL(customReferer).origin; } catch (_) {}
     }
 
     if (req.headers.range) {
@@ -57,6 +74,7 @@ module.exports = async (req, res) => {
       
       const rawPath = targetUrl.origin + targetUrl.pathname;
       const baseUrl = rawPath.substring(0, rawPath.lastIndexOf('/') + 1);
+      const refQuery = customReferer ? `&referer=${encodeURIComponent(customReferer)}` : '';
 
       // Rewrite relative segment lines and tag URIs to route via /api/stream proxy
       const rewrittenM3u8 = m3u8Text.split('\n').map(line => {
@@ -66,7 +84,7 @@ module.exports = async (req, res) => {
           if (trimmed.includes('URI=')) {
             return line.replace(/URI=["']([^"']+)["']/g, (match, p1) => {
               let fullSeg = p1.startsWith('http') ? p1 : (p1.startsWith('/') ? targetUrl.origin + p1 : baseUrl + p1);
-              return `URI="/api/stream?url=${encodeURIComponent(fullSeg)}"`;
+              return `URI="/api/stream?url=${encodeURIComponent(fullSeg)}${refQuery}"`;
             });
           }
           return line;
@@ -75,7 +93,7 @@ module.exports = async (req, res) => {
         if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
           fullSegmentUrl = trimmed.startsWith('/') ? targetUrl.origin + trimmed : baseUrl + trimmed;
         }
-        return `/api/stream?url=${encodeURIComponent(fullSegmentUrl)}`;
+        return `/api/stream?url=${encodeURIComponent(fullSegmentUrl)}${refQuery}`;
       }).join('\n');
 
       res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');

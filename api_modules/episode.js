@@ -34,14 +34,22 @@ module.exports = async (req, res) => {
     // Delegate Hstream episode stream requests
     if (provider === 'hstream') {
       const hstreamModule = require('./hstream');
-      const playInfo = await hstreamModule.getHstreamPlayUrl(episodeId);
+      let targetPath = episodeId;
+      if (!String(targetPath).startsWith('/hentai/')) {
+        const detail = await hstreamModule.getHstreamDetail(rawContentId);
+        if (detail && detail.episodes && detail.episodes.length > 0) {
+          const ep = detail.episodes.find(e => String(e.episodeNumber) === String(episodeId)) || detail.episodes[0];
+          targetPath = ep.id;
+        }
+      }
+      const playInfo = await hstreamModule.getHstreamPlayUrl(targetPath);
       if (playInfo && playInfo.playUrl) {
         return res.status(200).json({
           success: true,
           mediaUrl: playInfo.playUrl,
           playUrl: playInfo.playUrl,
           subtitles: playInfo.subtitles || [],
-          qualities: [{ quality: '1080P', url: playInfo.playUrl }]
+          qualities: [{ quality: '1080P HD', label: '1080P HD', url: playInfo.playUrl }]
         });
       }
       return res.status(404).json({ success: false, error: 'Hstream video stream not found' });
@@ -50,7 +58,15 @@ module.exports = async (req, res) => {
     // Delegate HentaiMama episode stream requests
     if (provider === 'hentaimama') {
       const hmamaModule = require('./hentaimama');
-      const playInfo = await hmamaModule.getHentaiMamaPlayUrl(episodeId);
+      let targetPath = episodeId;
+      if (!String(targetPath).includes('/episodes/')) {
+        const detail = await hmamaModule.getHentaiMamaDetail(rawContentId);
+        if (detail && detail.episodes && detail.episodes.length > 0) {
+          const ep = detail.episodes.find(e => String(e.episodeNumber) === String(episodeId)) || detail.episodes[0];
+          targetPath = ep.id;
+        }
+      }
+      const playInfo = await hmamaModule.getHentaiMamaPlayUrl(targetPath);
       if (playInfo && playInfo.playUrl) {
         return res.status(200).json({
           success: true,
@@ -68,6 +84,25 @@ module.exports = async (req, res) => {
       const hollywoodModule = require('./hollywood');
       const detailRes = await hollywoodModule.getDetail(rawContentId, req.query);
       if (detailRes && detailRes.embedServers && detailRes.embedServers.length > 0) {
+        const { extractStream } = require('./extractors');
+        for (const server of detailRes.embedServers) {
+          try {
+            const extracted = await extractStream(server.url);
+            if (extracted && extracted.url) {
+              const proxiedUrl = `/api/stream?url=${encodeURIComponent(extracted.url)}&referer=${encodeURIComponent(extracted.referer || '')}`;
+              return res.status(200).json({
+                success: true,
+                playUrl: proxiedUrl,
+                mediaUrl: proxiedUrl,
+                streamUrl: proxiedUrl,
+                streamType: extracted.type || 'hls',
+                subtitles: extracted.subtitles || [],
+                qualities: [{ quality: 'HD', label: 'HD', url: proxiedUrl }],
+                embedServers: detailRes.embedServers
+              });
+            }
+          } catch (_) {}
+        }
         const playUrl = detailRes.embedServers[0].url;
         return res.status(200).json({
           success: true,
@@ -90,6 +125,22 @@ module.exports = async (req, res) => {
         const ep = detailRes.detail.episodes.find(e => String(e.id) === String(episodeId)) || detailRes.detail.episodes[0];
         const playUrl = ep ? (ep.embedUrl || ep.playUrl) : null;
         if (playUrl) {
+          try {
+            const { extractStream } = require('./extractors');
+            const extracted = await extractStream(playUrl);
+            if (extracted && extracted.url) {
+              const proxiedUrl = `/api/stream?url=${encodeURIComponent(extracted.url)}&referer=${encodeURIComponent(extracted.referer || '')}`;
+              return res.status(200).json({
+                success: true,
+                playUrl: proxiedUrl,
+                mediaUrl: proxiedUrl,
+                streamUrl: proxiedUrl,
+                streamType: extracted.type || 'hls',
+                subtitles: extracted.subtitles || [],
+                qualities: [{ quality: 'HD', label: 'HD', url: proxiedUrl }]
+              });
+            }
+          } catch (_) {}
           return res.status(200).json({
             success: true,
             playUrl,
@@ -111,6 +162,22 @@ module.exports = async (req, res) => {
         const ep = detailRes.detail.episodes.find(e => String(e.id) === String(episodeId)) || detailRes.detail.episodes[0];
         const playUrl = ep ? (ep.embedUrl || ep.playUrl) : null;
         if (playUrl) {
+          try {
+            const { extractStream } = require('./extractors');
+            const extracted = await extractStream(playUrl);
+            if (extracted && extracted.url) {
+              const proxiedUrl = `/api/stream?url=${encodeURIComponent(extracted.url)}&referer=${encodeURIComponent(extracted.referer || '')}`;
+              return res.status(200).json({
+                success: true,
+                playUrl: proxiedUrl,
+                mediaUrl: proxiedUrl,
+                streamUrl: proxiedUrl,
+                streamType: extracted.type || 'hls',
+                subtitles: extracted.subtitles || [],
+                qualities: [{ quality: 'HD', label: 'HD', url: proxiedUrl }]
+              });
+            }
+          } catch (_) {}
           return res.status(200).json({
             success: true,
             playUrl,
@@ -122,6 +189,43 @@ module.exports = async (req, res) => {
         }
       }
       return res.status(404).json({ success: false, error: 'Asian drama stream not found' });
+    }
+
+    // Delegate Classics archive stream requests
+    if (provider === 'classics') {
+      try {
+        const url = `https://archive.org/metadata/${contentId}`;
+        const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+        if (response.ok) {
+          const data = await response.json();
+          const files = data.files || [];
+          const videoFiles = files.filter(f => {
+            if (!f.name) return false;
+            const name = f.name.toLowerCase();
+            const format = (f.format || '').toLowerCase();
+            return format.includes('mpeg') || format.includes('h.264') || format.includes('video') || format.includes('mp4') || name.endsWith('.mp4') || name.endsWith('.ogv') || name.endsWith('.webm') || name.endsWith('.mkv');
+          });
+          videoFiles.sort((a, b) => (parseInt(b.size, 10) || 0) - (parseInt(a.size, 10) || 0));
+          const streamUrl = videoFiles.length > 0 ? `https://archive.org/download/${contentId}/${videoFiles[0].name}` : `https://archive.org/embed/${contentId}`;
+          return res.status(200).json({
+            success: true,
+            playUrl: streamUrl,
+            mediaUrl: streamUrl,
+            streamUrl: streamUrl,
+            streamType: videoFiles.length > 0 ? 'mp4' : 'embed',
+            subtitles: [],
+            qualities: [{ quality: 'Original HD', label: 'Original HD', url: streamUrl }]
+          });
+        }
+      } catch (_) {}
+      return res.status(200).json({
+        success: true,
+        playUrl: `https://archive.org/embed/${contentId}`,
+        mediaUrl: `https://archive.org/embed/${contentId}`,
+        streamUrl: `https://archive.org/embed/${contentId}`,
+        streamType: 'embed',
+        subtitles: []
+      });
     }
 
     // Delegate Narto Drama episode requests to Narto handler
@@ -142,31 +246,40 @@ module.exports = async (req, res) => {
     let subtitles = [];
     let targetEpId = episodeId;
 
-    for (const cat of categoriesToTry) {
-      try {
-        const detailData = await loklokFetch(`/movieDrama/get?id=${contentId}&category=${cat}`, { headers });
-        if ((detailData.code === '00000' || detailData.code === '000000') && detailData.data && (detailData.data.episodeVo || detailData.data.name)) {
-          const rawEpisodes = Array.isArray(detailData.data.episodeVo) ? detailData.data.episodeVo : (detailData.data.episodeVo ? [detailData.data.episodeVo] : []);
-          const targetEp = rawEpisodes.find(ep => String(ep.id) === String(episodeId)) || 
-                           rawEpisodes.find(ep => String(ep.seriesNo) === String(episodeId)) || 
-                           rawEpisodes[parseInt(episodeId, 10) - 1] || 
-                           rawEpisodes[0];
-          
-          if (targetEp) {
-            targetEpId = String(targetEp.id);
-            if (targetEp.subtitlingList || targetEp.subtitles) {
-              const rawSubs = targetEp.subtitlingList || targetEp.subtitles;
-              subtitles = rawSubs.map(s => ({
-                html: s.language || s.languageAbbr || 'Subtitle',
-                lang: s.languageAbbr || s.language || 'en',
-                rawUrl: s.subtitlingUrl || s.url,
-                url: `/api/subtitle?url=${encodeURIComponent(s.subtitlingUrl || s.url)}`
-              })).filter(s => s.url);
+    const tryExtractSubtitles = async (hdrs) => {
+      for (const cat of categoriesToTry) {
+        try {
+          const detailData = await loklokFetch(`/movieDrama/get?id=${contentId}&category=${cat}`, { headers: hdrs });
+          if ((detailData.code === '00000' || detailData.code === '000000') && detailData.data && (detailData.data.episodeVo || detailData.data.name)) {
+            const rawEpisodes = Array.isArray(detailData.data.episodeVo) ? detailData.data.episodeVo : (detailData.data.episodeVo ? [detailData.data.episodeVo] : []);
+            const targetEp = rawEpisodes.find(ep => String(ep.id) === String(episodeId)) || 
+                             rawEpisodes.find(ep => String(ep.seriesNo) === String(episodeId)) || 
+                             rawEpisodes[parseInt(episodeId, 10) - 1] || 
+                             rawEpisodes[0];
+            
+            if (targetEp) {
+              targetEpId = String(targetEp.id);
+              const rawSubs = targetEp.subtitlingList || targetEp.subtitles || detailData.data.subtitlingList || [];
+              if (rawSubs && rawSubs.length > 0) {
+                subtitles = rawSubs.map(s => ({
+                  html: s.language || s.languageAbbr || 'Subtitle',
+                  label: s.language || s.languageAbbr || 'Subtitle',
+                  lang: s.languageAbbr || s.language || 'en',
+                  rawUrl: s.subtitlingUrl || s.url,
+                  url: `/api/subtitle?url=${encodeURIComponent(s.subtitlingUrl || s.url)}`
+                })).filter(s => s.url);
+              }
+              return true;
             }
-            break;
           }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
+      return false;
+    };
+
+    const subSuccess = await tryExtractSubtitles(headers);
+    if (!subSuccess || subtitles.length === 0) {
+      await tryExtractSubtitles(getLoklokHeaders(''));
     }
 
     let rawStreamUrl = '';
@@ -176,165 +289,96 @@ module.exports = async (req, res) => {
     let usedCategory = category;
     let usedEpId = targetEpId || episodeId;
 
-    // Try targetEpId first, with fallback to original episodeId
-    const episodeIdsToTry = Array.from(new Set([String(targetEpId), String(episodeId)]));
+    // Try targetEpId first, with fallback to '0' (Loklok movie ep), original episodeId, and contentId
+    const episodeIdsToTry = Array.from(new Set([String(targetEpId), '0', String(episodeId), String(contentId)])).filter(id => id && id !== 'undefined' && id !== 'null');
 
-    // Reverse-engineered H5 API helper for signed Loklok media preview stream retrieval
-    const { H5_RSA_PUBLIC_KEY, h5GenKey, h5GetSign, h5RsaEncrypt } = require('./search');
-
-    async function h5ApiGetMediaInfo(targetContentId, targetEpId, catVal, defVal) {
-      const randomKey = h5GenKey(16);
-      const currentTime = Date.now();
-      const tz = 0 - new Date().getTimezoneOffset() / 60;
-      const queryData = {
-        category: String(catVal),
-        contentId: String(targetContentId),
-        definition: String(defVal),
-        episodeId: String(targetEpId)
-      };
-      const sign = h5GetSign(queryData, randomKey, currentTime);
-      const aesKey = h5RsaEncrypt(randomKey);
-
-      const hosts = ['https://h5-api.loklok.site', 'https://h5-api.hehekang.com'];
-      const cfProxy = 'https://wox-stream-proxy.wizardofxerox.workers.dev/?url=';
-
-      for (const host of hosts) {
-        const targetUrl = `${host}/cms/v2/h5/media/previewInfo?category=${catVal}&contentId=${targetContentId}&episodeId=${targetEpId}&definition=${defVal}`;
-        const urlsToTry = [targetUrl, `${cfProxy}${encodeURIComponent(targetUrl)}`];
-
-        for (const url of urlsToTry) {
-          try {
-            const res = await fetch(url, {
-              method: 'GET',
-              headers: {
-                'sign': sign,
-                'aesKey': aesKey,
-                'currentTime': currentTime.toString(),
-                'clientType': 'H5',
-                'versionCode': '32',
-                'lang': 'en',
-                'deviceid': h5GenKey(32),
-                'timezone': `GMT${tz < 0 ? tz : '+' + tz}`,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://h5.loklok.site/',
-                'Origin': 'https://h5.loklok.site'
-              },
-              signal: AbortSignal.timeout(10000)
-            });
-            if (!res.ok) continue;
-            const data = await res.json();
-            if (data.code === '00000' && data.data && data.data.mediaUrl) {
-              return data.data;
-            }
-          } catch (_) {}
+    const fetchDefinitionStream = async (def, catVal, epIdVal) => {
+      try {
+        const endpoint = `/media/previewInfo?category=${catVal}&contentId=${contentId}&episodeId=${epIdVal}&definition=${def}`;
+        const qRes = await loklokFetch(endpoint, { headers });
+        if ((qRes.code === '00000' || qRes.code === '000000') && qRes.data && qRes.data.mediaUrl) {
+          return { code: def, size: qRes.data.size || 0, rawStreamUrl: qRes.data.mediaUrl, totalDuration: qRes.data.totalDuration || 0 };
         }
-      }
+      } catch (_) {}
+
+      try {
+        const endpoint = `/media/previewInfo?category=${catVal}&contentId=${contentId}&episodeId=${epIdVal}&definition=${def}`;
+        const qRes = await loklokFetch(endpoint, { headers: getLoklokHeaders('') });
+        if ((qRes.code === '00000' || qRes.code === '000000') && qRes.data && qRes.data.mediaUrl) {
+          return { code: def, size: qRes.data.size || 0, rawStreamUrl: qRes.data.mediaUrl, totalDuration: qRes.data.totalDuration || 0 };
+        }
+      } catch (_) {}
+
       return null;
-    }
+    };
 
     // Outer loop through category fallbacks (0: Movie, 1: Series, 2: Variety)
     for (const cat of categoriesToTry) {
       for (const epId of episodeIdsToTry) {
         for (const def of definitionsToTry) {
-          const h5Media = await h5ApiGetMediaInfo(contentId, epId, cat, def);
-          if (h5Media && h5Media.mediaUrl) {
-            rawStreamUrl = h5Media.mediaUrl;
+          const resData = await fetchDefinitionStream(def, cat, epId);
+          if (resData && resData.rawStreamUrl) {
+            rawStreamUrl = resData.rawStreamUrl;
             usedDefinition = def;
             usedCategory = cat;
             usedEpId = epId;
-            fileSize = h5Media.size || 0;
-            totalDuration = h5Media.totalDuration || 0;
+            fileSize = resData.size || 0;
+            totalDuration = resData.totalDuration || 0;
             break;
           }
-          try {
-            const endpoint = `/media/previewInfo?category=${cat}&contentId=${contentId}&episodeId=${epId}&definition=${def}`;
-            const data = await loklokFetch(endpoint, { headers });
-
-            if ((data.code === '00000' || data.code === '000000') && data.data && data.data.mediaUrl) {
-              rawStreamUrl = data.data.mediaUrl;
-              usedDefinition = def;
-              usedCategory = cat;
-              usedEpId = epId;
-              fileSize = data.data.size || 0;
-              totalDuration = data.data.totalDuration || 0;
-              break;
-            }
-          } catch (_) {}
         }
         if (rawStreamUrl) break;
       }
       if (rawStreamUrl) break;
     }
 
-    // Fallback: Retry with guest headers if user token previewInfo failed
-    if (!rawStreamUrl && token) {
-      const guestHeaders = getLoklokHeaders('');
-      for (const cat of categoriesToTry) {
-        for (const epId of episodeIdsToTry) {
-          for (const def of definitionsToTry) {
-            try {
-              const endpoint = `/media/previewInfo?category=${cat}&contentId=${contentId}&episodeId=${epId}&definition=${def}`;
-              const data = await loklokFetch(endpoint, { headers: guestHeaders });
-
-              if ((data.code === '00000' || data.code === '000000') && data.data && data.data.mediaUrl) {
-                rawStreamUrl = data.data.mediaUrl;
-                usedDefinition = def;
-                usedCategory = cat;
-                usedEpId = epId;
-                fileSize = data.data.size || 0;
-                totalDuration = data.data.totalDuration || 0;
-                break;
-              }
-            } catch (_) {}
-          }
-          if (rawStreamUrl) break;
-        }
-        if (rawStreamUrl) break;
-      }
-    }
-
     if (!rawStreamUrl) {
       return res.status(200).json({ success: false, error: 'No media stream URL found for this episode.' });
     }
 
-    // Fetch all available quality definitions for this episode and sort by stream size/bitrate descending
+    // Fetch all available quality definitions for this episode using signed H5 API and fallback headers
     const rawStreamsMap = new Map();
-    // Seed with the stream we already found during resolution
-    rawStreamsMap.set(rawStreamUrl, {
-      code: usedDefinition,
-      size: fileSize,
-      rawStreamUrl: rawStreamUrl
-    });
+    if (rawStreamUrl) {
+      rawStreamsMap.set(rawStreamUrl, {
+        code: usedDefinition,
+        size: fileSize,
+        rawStreamUrl: rawStreamUrl
+      });
+    }
 
-    // Query remaining definitions (skip the one we already have)
     const remainingDefs = definitionsToTry.filter(d => d !== usedDefinition);
     for (const def of remainingDefs) {
-      try {
-        const endpoint = `/media/previewInfo?category=${usedCategory}&contentId=${contentId}&episodeId=${usedEpId}&definition=${def}`;
-        const qRes = await loklokFetch(endpoint, { headers });
-        if ((qRes.code === '00000' || qRes.code === '000000') && qRes.data && qRes.data.mediaUrl) {
-          const streamUrl = qRes.data.mediaUrl;
-          if (!rawStreamsMap.has(streamUrl)) {
-            rawStreamsMap.set(streamUrl, {
-              code: def,
-              size: qRes.data.size || 0,
-              rawStreamUrl: streamUrl
-            });
-          }
-        }
-      } catch (_) {}
+      const resData = await fetchDefinitionStream(def, usedCategory, usedEpId);
+      if (resData && resData.rawStreamUrl && !rawStreamsMap.has(resData.rawStreamUrl)) {
+        rawStreamsMap.set(resData.rawStreamUrl, resData);
+      }
     }
 
     // Sort unique stream URLs by size descending (largest bitrate/file size first)
     const sortedStreams = Array.from(rawStreamsMap.values()).sort((a, b) => b.size - a.size);
-    const labelTiers = ['1080p Full HD', '720p HD', '480p SD', '360p LD'];
-    const qualities = sortedStreams.map((item, idx) => ({
-      code: item.code,
-      label: labelTiers[idx] || '360p LD',
-      size: item.size,
-      sizeFormatted: formatBytes(item.size),
-      rawStreamUrl: item.rawStreamUrl
-    }));
+
+    const defLabelMap = {
+      'GROOT_HD': '1080p Full HD',
+      'GROOT_SD': '720p HD',
+      'GROOT_FD': '480p SD',
+      'GROOT_LD': '360p LD'
+    };
+
+    const qualities = sortedStreams.map((item, idx) => {
+      const mappedLabel = defLabelMap[item.code] || (idx === 0 ? '1080p Full HD' : idx === 1 ? '720p HD' : idx === 2 ? '480p SD' : '360p LD');
+      const proxiedUrl = `/api/stream?url=${encodeURIComponent(item.rawStreamUrl)}`;
+      return {
+        code: item.code,
+        quality: mappedLabel,
+        resolution: mappedLabel,
+        label: mappedLabel,
+        size: item.size,
+        sizeFormatted: formatBytes(item.size),
+        rawStreamUrl: item.rawStreamUrl,
+        url: proxiedUrl,
+        streamUrl: proxiedUrl
+      };
+    });
 
     // Ensure the default stream URL is the highest quality (largest size) stream
     if (qualities.length > 0 && qualities[0].rawStreamUrl) {

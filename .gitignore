@@ -6,6 +6,8 @@
 *.apk
 *.py
 *.bat
+cloudflared.exe
+config.yml
 
 # Node dependencies
 node_modules/

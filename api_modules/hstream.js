@@ -112,7 +112,7 @@ async function getHstreamDetail(id) {
 
     if (episodes.length === 0) {
       episodes.push({
-        id: `/hentai/${rawSlug}`,
+        id: `/hentai/${rawSlug}-1`,
         name: 'Episode 1',
         episodeNumber: 1,
         definitions: ['1080P', '720P'],
@@ -141,20 +141,30 @@ async function getHstreamDetail(id) {
 
 async function getHstreamPlayUrl(epPath) {
   try {
-    const fullUrl = epPath.startsWith('http') ? epPath : `${BASE_URL}${epPath}`;
+    let cleanPath = epPath.startsWith('http') ? epPath.replace(/^https?:\/\/[^/]+/, '') : epPath;
+    if (!cleanPath.startsWith('/hentai/')) cleanPath = `/hentai/${cleanPath}`;
+
+    // If path is a series root path like `/hentai/overflow`, append `-1` to target episode 1
+    if (!cleanPath.match(/-\d+$/)) {
+      cleanPath = `${cleanPath}-1`;
+    }
+
+    const fullUrl = `${BASE_URL}${cleanPath}`;
     const pageRes = await fetch(fullUrl, { headers: HEADERS });
     if (!pageRes.ok) return null;
 
-    const html = await pageRes.text();
-    const csrfMatch = html.match(/name="_token"\s+value="([^"]+)"/i);
-    const eidMatch = html.match(/id="e_id"[^>]+value="([^"]+)"/i);
-
-    if (!eidMatch) return null;
-    const episodeId = eidMatch[1];
-    const csrfToken = csrfMatch ? csrfMatch[1] : '';
-
     const rawCookies = pageRes.headers.getSetCookie ? pageRes.headers.getSetCookie() : [pageRes.headers.get('set-cookie')];
     const cookieHeader = rawCookies.map(c => String(c || '').split(';')[0]).filter(Boolean).join('; ');
+
+    const xsrfMatch = cookieHeader.match(/XSRF-TOKEN=([^;]+)/);
+    if (!xsrfMatch) return null;
+    const xsrfToken = decodeURIComponent(xsrfMatch[1]);
+
+    const html = await pageRes.text();
+    const eidMatch = html.match(/<input[^>]*id=["']e_id["'][^>]*value=["']([^"']+)["']/i) ||
+                     html.match(/value=["']([^"']+)["'][^>]*id=["']e_id["']/i);
+    if (!eidMatch) return null;
+    const episodeId = eidMatch[1];
 
     const apiHeaders = {
       'User-Agent': HEADERS['User-Agent'],
@@ -162,8 +172,7 @@ async function getHstreamPlayUrl(epPath) {
       'Origin': BASE_URL,
       'Content-Type': 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
-      'X-CSRF-TOKEN': csrfToken,
-      'X-XSRF-TOKEN': csrfToken,
+      'X-XSRF-TOKEN': xsrfToken,
       'Cookie': cookieHeader
     };
 
@@ -180,13 +189,16 @@ async function getHstreamPlayUrl(epPath) {
       return null;
     }
 
-    const domain = apiJson.stream_domains[Math.floor(Math.random() * apiJson.stream_domains.length)];
+    const domain = apiJson.stream_domains[0];
     const baseStream = `${domain}/${apiJson.stream_url}`;
-    const playUrl = `${baseStream}/720/manifest.mpd`;
+    const playUrl = `${baseStream}/x264.720p.mp4`;
 
     return {
+      success: true,
       playUrl: playUrl,
-      format: 'mpd',
+      mediaUrl: playUrl,
+      streamUrl: playUrl,
+      streamType: 'mp4',
       subtitles: [{ url: `${baseStream}/eng.ass`, lang: 'English' }]
     };
   } catch (err) {

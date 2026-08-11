@@ -1,0 +1,49 @@
+{
+  "name": "WOX-Stream | Watch HD Movies, TV Series & Anime",
+  "short_name": "WOX-Stream",
+  "description": "Stream HD Movies, TV Series, Anime, Asian Dramas, Short Dramas & Documentaries for free.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#060609",
+  "theme_color": "#0a0a0f",
+  "categories": ["entertainment", "video", "movies"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/wox_logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Discover",
+      "url": "/?view=category",
+      "description": "Browse movies and series by category"
+    },
+    {
+      "name": "Watch History",
+      "url": "/?view=history",
+      "description": "Resume watching your titles"
+    },
+    {
+      "name": "Release Schedule",
+      "url": "/?view=calendar",
+      "description": "Weekly airing calendar"
+    }
+  ]
+}

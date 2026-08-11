@@ -110,22 +110,63 @@ function setCorsHeaders(res) {
 // Matches Loklok.kt ensureAbsoluteCoverUrl & encodeUrl with RAM/Edge proxy caching
 function fixCoverUrl(url) {
   if (!url) return '';
-  let fullUrl = url;
+  let strUrl = String(url).trim();
+
+  // Recursively unwrap nested /api/image?url= proxy wrappers
+  for (let iter = 0; iter < 10; iter++) {
+    if (!strUrl.includes('/api/image') && !strUrl.includes('%2Fapi%2Fimage') && !strUrl.includes('%252Fapi%252Fimage')) break;
+    try {
+      let decoded = decodeURIComponent(strUrl);
+      const idx = decoded.indexOf('/api/image?url=');
+      if (idx !== -1) {
+        strUrl = decoded.substring(idx + 15);
+      } else {
+        break;
+      }
+    } catch (_) {
+      break;
+    }
+  }
+
+  // Fully decode any percent-encoded http(s) prefix
+  for (let i = 0; i < 5; i++) {
+    if (strUrl.startsWith('http%3A') || strUrl.startsWith('https%3A') || strUrl.startsWith('http%253A') || strUrl.startsWith('https%253A')) {
+      try {
+        strUrl = decodeURIComponent(strUrl);
+      } catch (_) {
+        break;
+      }
+    } else {
+      break;
+    }
+  }
+
+  // Clean up any nested host prefixes (e.g. https://img.chhhn.com/https://...)
+  while (/^https?:\/\/img\.chhhn\.com\/https?:\/\//i.test(strUrl)) {
+    strUrl = strUrl.replace(/^https?:\/\/img\.chhhn\.com\//i, '');
+  }
+
+  let fullUrl = strUrl;
   if (!fullUrl.startsWith('http://') && !fullUrl.startsWith('https://')) {
     const path = fullUrl.startsWith('/') ? fullUrl : `/${fullUrl}`;
     fullUrl = `https://img.chhhn.com${path}`;
   } else {
     fullUrl = fullUrl.replace('img.loklok.tv', 'img.chhhn.com')
                      .replace('pic.loklok.tv', 'img.chhhn.com')
-                     .replace('image.loklok.tv', 'img.chhhn.com');
+                     .replace('image.loklok.tv', 'img.chhhn.com')
+                     .replace('img.snssb.com', 'img.chhhn.com');
   }
+
+  fullUrl = fullUrl.replace(/^https?:\/\/img\.chhhn\.com\/https?:\/\//i, 'https://');
 
   let finalUrl = fullUrl;
   try {
     const schemeAndHost = fullUrl.substring(0, fullUrl.indexOf('://') + 3) + fullUrl.substring(fullUrl.indexOf('://') + 3).split('/')[0];
     const path = fullUrl.substring(fullUrl.indexOf('://') + 3).split('/').slice(1).join('/');
     const encodedPath = path.split('/').map(segment => {
-      return encodeURIComponent(segment)
+      let s = segment;
+      try { s = decodeURIComponent(segment); } catch (_) {}
+      return encodeURIComponent(s)
         .replace(/\+/g, '%20')
         .replace(/!/g, '%21')
         .replace(/'/g, '%27')
@@ -152,23 +193,28 @@ const phProxyList = [
 ];
 
 async function loklokFetch(endpoint, options = {}) {
-  const targetBase = 'https://ga-mobile-api.loklok.tv/cms/app';
+  const targetBase = process.env.LOKLOK_PROXY_URL || 'https://ga-mobile-api.loklok.tv/cms/app';
   const url = endpoint.startsWith('http') ? endpoint : `${targetBase}${endpoint}`;
   const isSearch = endpoint.includes('searchWithKeyWord') || endpoint.includes('search');
   const defaultHeaders = getLoklokHeaders(options.token || '');
   const headers = { ...defaultHeaders, ...(options.headers || {}) };
 
-  // 1. Direct fetch attempt with 4.5s timeout
+  // 1. Direct fetch attempt with 6s timeout
   try {
     const res = await fetch(url, {
       method: options.method || 'GET',
       headers,
       body: options.body,
-      signal: AbortSignal.timeout(4500)
+      signal: AbortSignal.timeout(6000)
     });
     if (res.ok) {
-      const data = await res.json();
-      if (data && data.code === '00000') return data;
+      const text = await res.text();
+      if (!text.trim().startsWith('<')) {
+        const data = JSON.parse(text);
+        if (data && (data.code === '00000' || data.code === '000000')) return data;
+        // Return non-success codes so caller can see them (e.g. B0300 = resource not found)
+        if (data && data.code) return data;
+      }
     }
   } catch (_) {}
 
@@ -181,18 +227,24 @@ async function loklokFetch(endpoint, options = {}) {
         headers,
         body: options.body,
         dispatcher,
-        signal: AbortSignal.timeout(2000)
+        signal: AbortSignal.timeout(4000)
       });
       if (res.ok) {
-        const data = await res.json();
-        if (data && data.data && Array.isArray(data.data.searchResults) && data.data.searchResults.length > 0) {
-          return data;
+        const text = await res.text();
+        if (!text.trim().startsWith('<')) {
+          const data = JSON.parse(text);
+          if (data && (data.code === '00000' || data.code === '000000')) return data;
+          if (data && data.code) return data;
         }
       }
     } catch (_) {}
   }
 
-  return { code: '00000', data: { searchResults: [] } };
+  // Return a distinguishable failure (not masking it as success)
+  if (isSearch) {
+    return { code: '00000', data: { searchResults: [] } };
+  }
+  return { code: 'FETCH_FAILED', data: null, msg: 'All Loklok API endpoints failed' };
 }
 
 // --- WOX MASKING GATEWAY UTILITIES ---
@@ -232,15 +284,32 @@ function unmaskId(maskedId) {
   // Check all known prefixes
   for (const [prefix, provider] of Object.entries(PREFIX_TO_PROVIDER)) {
     if (str.startsWith(prefix)) {
-      const raw = Buffer.from(str.slice(prefix.length), 'base64url').toString('utf8');
-      return { provider, id: raw };
+      const rest = str.slice(prefix.length);
+      // If rest is already purely numeric, it's a raw unencoded ID!
+      if (/^\d+$/.test(rest)) {
+        return { provider, id: rest };
+      }
+      try {
+        const decoded = Buffer.from(rest, 'base64url').toString('utf8');
+        // Validate decoded string contains printable ASCII / UTF8 and no control characters
+        if (decoded && /^[\w\d.\-_:%\/]+$/i.test(decoded)) {
+          return { provider, id: decoded };
+        }
+      } catch (_) {}
+      return { provider, id: rest };
     }
   }
   
   // Legacy prefix handling
-  if (str.startsWith('narto_')) {
-    return { provider: 'narto', id: str.replace('narto_', '') };
-  }
+  if (str.startsWith('narto_')) return { provider: 'narto', id: str.replace('narto_', '') };
+  if (str.startsWith('hollywood_') || str.startsWith('hw_')) return { provider: 'hollywood', id: str.replace(/^(hollywood_|hw_)/, '') };
+  if (str.startsWith('anime_') || str.startsWith('al_')) return { provider: 'anime', id: str.replace(/^anime_/, '') };
+  if (str.startsWith('drama_')) return { provider: 'drama', id: str.replace('drama_', '') };
+  if (str.startsWith('classics_')) return { provider: 'classics', id: str.replace('classics_', '') };
+  if (str.startsWith('adult_')) return { provider: 'adult', id: str.replace('adult_', '') };
+  if (str.startsWith('hstream_')) return { provider: 'hstream', id: str.replace('hstream_', '') };
+  if (str.startsWith('hentaimama_')) return { provider: 'hentaimama', id: str.replace('hentaimama_', '') };
+  
   return { provider: 'loklok', id: str };
 }
 
@@ -284,14 +353,6 @@ function cleanTitleForDeduplication(title) {
     .replace(/^\[(?:narto|loklok|hollywood|classics|anime|adult)\]\s*/gi, '')
     // 3. Remove language/dub/sub/quality brackets
     .replace(/\s*\([^)]*(?:india|korea|japan|philippines|china|indonesia|thailand|vietnam|us|uk|dub|sub|uncensored|hd|4k|1080p|720p|english|bahasa)[^)]*\)/gi, '')
-    // 4. Remove Season & Series suffixes
-    .replace(/\s*[-:\s]\s*season\s*\d+/gi, '')
-    .replace(/\s*\bseason\s*\d+\b/gi, '')
-    .replace(/\s*\bseries\s*\d+\b/gi, '')
-    .replace(/\s*\bs\d{1,2}\b/gi, '')
-    .replace(/\s*[-:\s]\s*full\s*episodes?\b/gi, '')
-    .replace(/\s*[-:\s]\s*\d+\s*$/gi, '') // trailing - 2, : 3
-    .replace(/\s*\b\d{4}\b/g, '') // year tags like 2024
     .trim();
 }
 
@@ -333,11 +394,20 @@ function robustDeduplicate(items) {
       if (!existing.mirrors.some(m => m.id === item.id)) {
         existing.mirrors.push(currentMirror);
       }
-      if ((!existing.cover || existing.cover.includes('placeholder')) && item.cover) {
+      if ((!existing.cover || existing.cover.includes('placeholder') || existing.cover.includes('data:image')) && item.cover && !item.cover.includes('placeholder')) {
         existing.cover = item.cover;
       }
       if (!existing.score && item.score) {
         existing.score = item.score;
+      }
+      if ((!existing.description || existing.description.length < 15) && item.description && item.description.length >= 15) {
+        existing.description = item.description;
+      }
+      if (!existing.year && item.year) {
+        existing.year = item.year;
+      }
+      if (!existing.genres && item.genres) {
+        existing.genres = item.genres;
       }
     }
   }

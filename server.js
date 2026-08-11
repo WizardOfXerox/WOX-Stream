@@ -43,7 +43,10 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon'
 };
 
-const server = http.createServer(async (req, res) => {
+const server = http.createServer({
+  maxHeaderSize: 131072, // 128 KB header limit to prevent HTTP 431 errors
+  insecureHTTPParser: true
+}, async (req, res) => {
   // Use WHATWG URL API to prevent DEP0169 DeprecationWarning
   const host = req.headers.host || `localhost:${PORT}`;
   const reqUrl = new URL(req.url, `http://${host}`);
@@ -75,64 +78,66 @@ const server = http.createServer(async (req, res) => {
     return res;
   };
 
-  // API Routes
-  if (pathname === '/api/home') return homeHandler(req, res);
-  if (pathname === '/api/search') return searchHandler(req, res);
-  if (pathname === '/api/detail') return detailHandler(req, res);
-  if (pathname === '/api/episode') return episodeHandler(req, res);
-  if (pathname === '/api/history') return historyHandler(req, res);
-  if (pathname === '/api/reportProgress') return reportProgressHandler(req, res);
-  if (pathname === '/api/login') return loginHandler(req, res);
-  if (pathname === '/api/loginThirdParty') return loginThirdPartyHandler(req, res);
-  if (pathname === '/api/image') return imageHandler(req, res);
-  if (pathname === '/api/stream') return streamHandler(req, res);
-  if (pathname === '/api/subtitle') return subtitleHandler(req, res);
-  if (pathname === '/api/auth') return authHandler(req, res);
-  if (pathname === '/api/calendar') return calendarHandler(req, res);
-  if (pathname === '/api/collection') return collectionHandler(req, res);
-  if (pathname === '/api/import-db') return importDbHandler(req, res);
-  if (pathname === '/api/convert-mp4') return convertMp4Handler(req, res);
-  if (pathname === '/api/stream-party') {
-    const streamPartyHandler = require('./api_modules/stream-party');
-    return streamPartyHandler(req, res);
+  function getHandler(modName) {
+    const modPath = path.join(__dirname, 'api_modules', modName);
+    try {
+      delete require.cache[require.resolve(modPath)];
+    } catch (_) {}
+    return require(modPath);
   }
 
+  // API Routes
+  if (pathname === '/api/home') return getHandler('home')(req, res);
+  if (pathname === '/api/search') return getHandler('search')(req, res);
+  if (pathname === '/api/detail') return getHandler('detail')(req, res);
+  if (pathname === '/api/episode') return getHandler('episode')(req, res);
+  if (pathname === '/api/history') return getHandler('history')(req, res);
+  if (pathname === '/api/reportProgress') return getHandler('reportProgress')(req, res);
+  if (pathname === '/api/login') return getHandler('login')(req, res);
+  if (pathname === '/api/loginThirdParty') return getHandler('loginThirdParty')(req, res);
+  if (pathname === '/api/image') return getHandler('image')(req, res);
+  if (pathname === '/api/stream') return getHandler('stream')(req, res);
+  if (pathname === '/api/resolve-embed') return getHandler('resolve-embed')(req, res);
+  if (pathname === '/api/subtitle') return getHandler('subtitle')(req, res);
+  if (pathname === '/api/auth') return getHandler('auth')(req, res);
+  if (pathname === '/api/calendar') return getHandler('calendar')(req, res);
+  if (pathname === '/api/collection') return getHandler('collection')(req, res);
+  if (pathname === '/api/appointments') return getHandler('appointments')(req, res);
+  if (pathname === '/api/import-db') return getHandler('import-db')(req, res);
+  if (pathname === '/api/convert-mp4') return getHandler('convert-mp4')(req, res);
+  if (pathname === '/api/stream-party') return getHandler('stream-party')(req, res);
+  if (pathname === '/api/cover-lookup') return getHandler('cover-lookup')(req, res);
 
   // Narto Drama API Routes
   if (pathname.startsWith('/api/narto')) {
-    const nartoRouter = require('./api_modules/narto');
+    const nartoRouter = getHandler('narto');
     req.url = pathname.replace('/api/narto', '') || '/';
     return nartoRouter(req, res);
   }
 
   // Hollywood API Route
   if (pathname.startsWith('/api/hollywood')) {
-    const hollywoodHandler = require('./api_modules/hollywood');
-    return hollywoodHandler(req, res);
+    return getHandler('hollywood')(req, res);
   }
 
   // Anime API Route
   if (pathname.startsWith('/api/anime-provider')) {
-    const animeHandler = require('./api_modules/anime-provider');
-    return animeHandler(req, res);
+    return getHandler('anime-provider')(req, res);
   }
 
   // Asian Drama API Route
   if (pathname.startsWith('/api/asian-drama')) {
-    const dramaHandler = require('./api_modules/asian-drama');
-    return dramaHandler(req, res);
+    return getHandler('asian-drama')(req, res);
   }
 
   // Classics API Route
   if (pathname.startsWith('/api/classics')) {
-    const classicsHandler = require('./api_modules/classics');
-    return classicsHandler(req, res);
+    return getHandler('classics')(req, res);
   }
 
   // Adult API Route
   if (pathname.startsWith('/api/adult')) {
-    const adultHandler = require('./api_modules/adult');
-    return adultHandler(req, res);
+    return getHandler('adult')(req, res);
   }
 
   // Static File Serving
@@ -152,6 +157,9 @@ const server = http.createServer(async (req, res) => {
       });
     } else {
       res.setHeader('Content-Type', MIME_TYPES[ext] || 'application/octet-stream');
+      if (ext === '.js' || ext === '.css' || ext === '.html') {
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+      }
       res.end(data);
     }
   });

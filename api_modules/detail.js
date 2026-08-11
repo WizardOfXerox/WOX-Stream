@@ -1,5 +1,9 @@
 const { getLoklokHeaders, setCorsHeaders, fixCoverUrl, loklokFetch, sanitizeToken, unmaskId, maskId } = require('./_utils');
 
+// In-Memory RAM Cache for Media Details (120s TTL)
+const detailCache = new Map();
+const DETAIL_CACHE_TTL = 120 * 1000;
+
 module.exports = async (req, res) => {
   setCorsHeaders(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -12,6 +16,13 @@ module.exports = async (req, res) => {
 
     if (!rawId || rawId === 'undefined' || rawId === 'null') {
       return res.status(400).json({ success: false, error: 'Invalid or missing media id' });
+    }
+
+    const cacheKey = `detail_${rawId}_${initialCategory}`;
+    const cached = detailCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < DETAIL_CACHE_TTL)) {
+      res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=300');
+      return res.status(200).json(cached.data);
     }
 
     const { provider, id } = unmaskId(rawId);
@@ -28,6 +39,7 @@ module.exports = async (req, res) => {
 
     // Delegate Hollywood items
     if (provider === 'hollywood') {
+      delete require.cache[require.resolve('./hollywood')];
       const hollywoodHandler = require('./hollywood');
       req.query.action = 'detail';
       req.query.id = rawId;
@@ -62,7 +74,7 @@ module.exports = async (req, res) => {
     if (provider === 'hstream') {
       const hstreamModule = require('./hstream');
       const detail = await hstreamModule.getHstreamDetail(rawId);
-      if (detail) return res.status(200).json({ success: true, detail });
+      if (detail) return res.status(200).json({ success: true, detail, data: detail, ...detail });
       return res.status(404).json({ success: false, error: 'Hstream title not found' });
     }
 
@@ -70,7 +82,7 @@ module.exports = async (req, res) => {
     if (provider === 'hentaimama') {
       const hmamaModule = require('./hentaimama');
       const detail = await hmamaModule.getHentaiMamaDetail(rawId);
-      if (detail) return res.status(200).json({ success: true, detail });
+      if (detail) return res.status(200).json({ success: true, detail, data: detail, ...detail });
       return res.status(404).json({ success: false, error: 'HentaiMama title not found' });
     }
 
@@ -133,17 +145,12 @@ module.exports = async (req, res) => {
     }
 
     // Category retry list: try specified category first, then fallback to 0 (Movie) and 1 (TV Series)
-    const categoriesToTry = Array.from(new Set([String(initialCategory), '1', '0', '2']));
+    const categoriesToTry = Array.from(new Set([String(initialCategory), '0', '1', '2']));
     let drama = null;
     let usedCategory = initialCategory;
 
     for (const cat of categoriesToTry) {
-      drama = await h5ApiGetDetail(id, cat);
-      if (drama && (drama.name || drama.title || drama.episodeVo)) {
-        usedCategory = cat;
-        break;
-      }
-      // Legacy fallback
+      // Primary: Mobile CMS API (ga-mobile-api.loklok.tv)
       try {
         const data = await loklokFetch(`/movieDrama/get?id=${id}&category=${cat}`, { headers });
         if ((data.code === '00000' || data.code === '000000') && data.data && (data.data.name || data.data.title || data.data.episodeVo)) {
@@ -152,6 +159,13 @@ module.exports = async (req, res) => {
           break;
         }
       } catch (_) {}
+
+      // Secondary: Signed H5 API fallback
+      drama = await h5ApiGetDetail(id, cat);
+      if (drama && (drama.name || drama.title || drama.episodeVo)) {
+        usedCategory = cat;
+        break;
+      }
     }
 
     if (!drama) {
@@ -193,7 +207,25 @@ module.exports = async (req, res) => {
 
 
 
-    return res.status(200).json({
+    const rawLikeList = Array.isArray(drama.likeList) ? drama.likeList : (Array.isArray(drama.likeDramaList) ? drama.likeDramaList : []);
+    const likeList = rawLikeList.map(item => ({
+      id: maskId('loklok', item.id),
+      title: item.name || item.title || 'Untitled',
+      cover: fixCoverUrl(item.coverVerticalUrl || item.coverHorizontalUrl || item.cover || ''),
+      score: item.score || '8.5',
+      category: String(item.category || item.domainType || '1')
+    }));
+
+    const rawRelatedList = Array.isArray(drama.relatedDramaList) ? drama.relatedDramaList : (Array.isArray(drama.refList) ? drama.refList : []);
+    const relatedList = rawRelatedList.map(item => ({
+      id: maskId('loklok', item.id),
+      title: item.name || item.title || 'Untitled',
+      cover: fixCoverUrl(item.coverVerticalUrl || item.coverHorizontalUrl || item.cover || ''),
+      score: item.score || '8.5',
+      category: String(item.category || item.domainType || '1')
+    }));
+
+    const detailPayload = {
       success: true,
       detail: {
         id: maskId('loklok', drama.id),
@@ -206,9 +238,20 @@ module.exports = async (req, res) => {
         genres: (drama.tagList || []).map(t => t.name).join(', '),
         score: drama.score || null,
         mirrors: mirrors,
-        episodes: episodes
+        episodes: episodes,
+        likeList: likeList,
+        relatedList: relatedList
       }
-    });
+    };
+
+    detailCache.set(cacheKey, { timestamp: Date.now(), data: detailPayload });
+    if (detailCache.size > 100) {
+      const oldest = detailCache.keys().next().value;
+      detailCache.delete(oldest);
+    }
+
+    res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=300');
+    return res.status(200).json(detailPayload);
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });
   }

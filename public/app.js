@@ -1,7 +1,130 @@
-// Global Modal Helpers
+// Global Application State & Fallbacks Initialization
+const SVG_FALLBACK = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iNDUwIiB2aWV3Qm94PSIwIDAgMzAwIDQ1MCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJnIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMWUxYjRiIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNnKSIvPjxjaXJjbGUgY3g9IjE1MCIgY3k9IjIwMCIgcj0iMzYiIGZpbGw9IiMzMTJlODEiIG9wYWNpdHk9IjAuOCIvPjxwYXRoIGQ9Ik0xNDIgMTg0IEwxNjQgMjAwIEwxNDIgMjE2IFoiIGZpbGw9IiM4MThjZjgiLz48dGV4dCB4PSI1MCUiIHk9IjI3MCIgZmlsbD0iIzk0YTMiOCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmb250LXdlaWdodD0iNzAwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBsZXR0ZXItc3BhY2luZz0iMS41Ij5XT1ggU1RSRUFNPC90ZXh0Pjwvc3ZnPg==';
+
+const initialToken = localStorage.getItem('loklok_token') || '';
+const appInitialToken = (initialToken === '1' || initialToken === 'undefined' || initialToken === 'null' || initialToken.length < 8) ? '' : initialToken;
+
+var state = window.state || {};
+Object.assign(state, {
+  activeNav: state.activeNav || 'home',
+  activeTab: state.activeTab || 'all',
+  activeProfileTab: state.activeProfileTab || 'history',
+  historySortMode: state.historySortMode || 'latest',
+  historySearchQuery: state.historySearchQuery || '',
+  historyFilterType: state.historyFilterType || 'all',
+  token: appInitialToken,
+  user: JSON.parse(localStorage.getItem('loklok_user') || 'null'),
+  language: localStorage.getItem('loklok_lang') || 'en',
+  artPlayer: null,
+  currentMedia: null,
+  currentEpisode: null,
+  progressInterval: null,
+  qrCode: null,
+  qrTimer: null,
+  settings: {
+    autoboot: localStorage.getItem('loklok_autoboot') === 'true',
+    blockPorno: localStorage.getItem('loklok_blockPorno') === 'true',
+    blockLgbt: localStorage.getItem('loklok_blockLgbt') === 'true',
+    allowAdult: localStorage.getItem('loklok_allowAdult') === 'true',
+    sourceLoklok: localStorage.getItem('loklok_sourceLoklok') !== 'false',
+    sourceNarto: localStorage.getItem('loklok_sourceNarto') !== 'false',
+    sourceHollywood: localStorage.getItem('loklok_sourceHollywood') !== 'false',
+    sourceViva: localStorage.getItem('loklok_sourceViva') !== 'false',
+    sourceAnime: localStorage.getItem('loklok_sourceAnime') !== 'false',
+    sourceClassics: false
+  },
+  filters: state.filters || {
+    page: 0,
+    params: '',
+    area: '',
+    category: '',
+    order: 'count',
+    cursor: '',
+    hasMore: true,
+    loadingMore: false,
+    seenIds: new Set(),
+    sourceFilter: ''
+  }
+});
+window.state = state;
+
+window.showToast = function(msg) {
+  let toast = document.getElementById('loklok-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'loklok-toast';
+    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#9333ea;color:#fff;padding:12px 20px;border-radius:10px;font-weight:600;font-size:0.9rem;z-index:999999;box-shadow:0 10px 25px rgba(0,0,0,0.5);transition:all 0.3s ease;';
+    document.body.appendChild(toast);
+  }
+  toast.innerText = msg;
+  toast.style.opacity = '1';
+  setTimeout(() => { toast.style.opacity = '0'; }, 3000);
+};
+
 window.openModal = function(id) {
   const modal = document.getElementById(id);
-  if (modal) modal.classList.add('active');
+  if (modal) {
+    modal.classList.add('active');
+    modal.style.display = 'flex';
+    modal.style.opacity = '1';
+    modal.style.pointerEvents = 'auto';
+    modal.style.top = '0';
+    modal.style.left = '0';
+    modal.style.width = '100vw';
+    modal.style.height = '100vh';
+    modal.style.position = 'fixed';
+    modal.style.zIndex = '999999';
+  }
+};
+
+window.purgeWatchHistory = function() {
+  const localHistory = JSON.parse(localStorage.getItem('loklok_watch_history') || '[]');
+  
+  if (localHistory.length === 0) {
+    showToast('Watch history is already empty.');
+    return;
+  }
+
+  const confirmPurge = confirm(`🗑️ Are you sure you want to PURGE your entire watch history (${localHistory.length} titles)?\n\nThis will clear all watch history cards and playback progress. This action cannot be undone.`);
+  if (!confirmPurge) return;
+
+  // Track deleted IDs so server sync won't restore deleted items
+  const deletedSet = new Set(JSON.parse(localStorage.getItem('loklok_deleted_history') || '[]'));
+  localHistory.forEach(i => {
+    if (i && i.id) deletedSet.add(String(i.id));
+  });
+  localStorage.setItem('loklok_deleted_history', JSON.stringify(Array.from(deletedSet)));
+
+  // Clear local storage history & progress entries
+  localStorage.removeItem('loklok_watch_history');
+  localStorage.removeItem('loklok_watch_progress');
+
+  showToast(`Purged ${localHistory.length} items from watch history! 🧹`);
+  
+  // Reload empty state in Watch History view
+  if (typeof loadHistory === 'function') {
+    loadHistory(false);
+  }
+};
+
+window.exportHistoryJson = function() {
+  const localHistory = JSON.parse(localStorage.getItem('loklok_watch_history') || '[]');
+  if (localHistory.length === 0) {
+    showToast('No watch history items to export.');
+    return;
+  }
+
+  const jsonStr = JSON.stringify({ version: '1.0', exportDate: new Date().toISOString(), count: localHistory.length, history: localHistory }, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `loklok_watch_history_backup_${Date.now()}.json`;
+  a.click();
+
+  URL.revokeObjectURL(url);
+  showToast(`Exported ${localHistory.length} history items to JSON! 📤`);
 };
 
 // closeModal defined below (L123) with QR timer cleanup
@@ -9,25 +132,34 @@ window.openModal = function(id) {
 // Global Handlers
 // switchNav defined below (after state declaration) with full view management
 
-window.filterCategoryNav = function(name, typeVal, regionVal = '') {
-  state.filters.sourceFilter = '';
-  state.filters.params = typeVal;
-  state.filters.area = regionVal;
-  state.filters.category = '';
+window.filterCategoryNav = function(name, typeVal, regionVal = '', sourceVal = '', genreVal = '') {
+  state.filters.sourceFilter = sourceVal || '';
+  state.filters.params = typeVal || '';
+  state.filters.area = regionVal || '';
+  state.filters.category = genreVal || '';
   
-  updatePillState('pills-type', typeVal);
-  updatePillState('pills-region', regionVal);
-  updatePillState('pills-genre', '');
+  updatePillState('pills-source', sourceVal || '');
+  updatePillState('pills-type', typeVal || '');
+  updatePillState('pills-region', regionVal || '');
+  updatePillState('pills-genre', genreVal || '');
+
+  // Highlight active sidebar item
+  document.querySelectorAll('.sidebar-nav .nav-item, .sidebar-bottom .nav-item').forEach(el => el.classList.remove('active'));
+  const activeNavId = `nav-${name.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+  const activeNav = document.getElementById(activeNavId);
+  if (activeNav) activeNav.classList.add('active');
 
   const urlParams = new URLSearchParams(window.location.search);
   urlParams.set('view', 'category');
+  if (sourceVal) urlParams.set('source', sourceVal); else urlParams.delete('source');
   if (typeVal) urlParams.set('params', typeVal); else urlParams.delete('params');
   if (regionVal) urlParams.set('area', regionVal); else urlParams.delete('area');
-  urlParams.delete('category');
+  if (genreVal) urlParams.set('category', genreVal); else urlParams.delete('category');
   const newQuery = `?${urlParams.toString()}`;
   history.replaceState({ view: 'category' }, '', newQuery);
 
   switchNav('category', false);
+  executeCategorySearch(true);
 };
 
 window.toggleFilterOptions = function() {
@@ -142,6 +274,50 @@ window.openSettingsModal = function() {
   if (modal) modal.classList.add('active');
 };
 
+window.openAccountSettingsModal = function() {
+  const modal = document.getElementById('modal-account-settings');
+  if (!modal) return;
+
+  const u = state.user || {};
+  const nickName = u.nickName || u.username || 'WOX User';
+  const email = u.email || u.username || 'user@wox.world';
+  const avatar = u.headImg || u.avatar || 'https://lh3.googleusercontent.com/a/AEdFTp5M7yDKAZX3l_OEEPwwaemJ4NYCRgdZpfeSWhcIjA=s96-c';
+
+  const avatarImg = document.getElementById('acc-settings-avatar-img');
+  const nameText = document.getElementById('acc-settings-display-name');
+  const emailText = document.getElementById('acc-settings-email-text');
+  const nameInput = document.getElementById('acc-settings-name-input');
+
+  if (avatarImg) avatarImg.src = avatar;
+  if (nameText) nameText.innerText = nickName;
+  if (emailText) emailText.innerText = email;
+  if (nameInput) nameInput.value = nickName;
+
+  const autoCheck = document.getElementById('acc-setting-autoboot');
+  const adultCheck = document.getElementById('acc-setting-allow-adult');
+
+  if (autoCheck) autoCheck.checked = !!state.settings.autoboot;
+  if (adultCheck) adultCheck.checked = !!state.settings.allowAdult;
+
+  modal.classList.add('active');
+};
+
+window.saveProfileSettings = function() {
+  const nameInput = document.getElementById('acc-settings-name-input');
+  if (!nameInput || !nameInput.value.trim()) {
+    showToast('Display name cannot be empty ⚠️');
+    return;
+  }
+  const newName = nameInput.value.trim();
+  if (state.user) {
+    state.user.nickName = newName;
+    state.user.username = newName;
+    localStorage.setItem('loklok_user', JSON.stringify(state.user));
+    renderUserArea();
+    showToast(`Updated display name to "${newName}" 🎉`);
+  }
+};
+
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';
   return String(str)
@@ -204,7 +380,10 @@ window.addEventListener('popstate', () => {
 
 window.closeModal = function(id) {
   const modal = document.getElementById(id);
-  if (modal) modal.classList.remove('active');
+  if (modal) {
+    modal.classList.remove('active');
+    modal.style.display = 'none';
+  }
   if (id === 'modal-detail' || id === 'modal-player') {
     resetPageTitleAndUrl();
   }
@@ -454,26 +633,45 @@ window.initQrCodeLogin = async function() {
   }
 };
 
-window.saveWatchProgress = function() {
+window.saveWatchProgress = function(force = false) {
   if (!state.currentMedia || !state.currentEpisode) return;
   const videoEl = document.querySelector('#player-container video');
-  if (!videoEl || !videoEl.currentTime || videoEl.currentTime < 1) return;
+  
+  let currentTime = 0;
+  let duration = 0;
+  if (videoEl) {
+    currentTime = Math.floor(videoEl.currentTime || 0);
+    duration = Math.floor(videoEl.duration || 0);
+  }
 
-  const currentTime = Math.floor(videoEl.currentTime);
-  const duration = Math.floor(videoEl.duration || 0);
+  if (!force && currentTime < 1) return;
+
   const media = state.currentMedia;
   const ep = state.currentEpisode;
 
   const currentHist = JSON.parse(localStorage.getItem('loklok_watch_history') || '[]');
-  const idx = currentHist.findIndex(h => h.id === String(media.id));
+  const normTitle = (media.title || '').trim().toLowerCase();
+  const idx = currentHist.findIndex(h => 
+    h.id === String(media.id) || 
+    (normTitle && h.title && h.title.trim().toLowerCase() === normTitle)
+  );
 
   const epName = ep.name ? (ep.name.startsWith('Ep') || ep.name.startsWith('Episode') ? ep.name : `Episode ${ep.episodeNumber || ep.id}`) : `Episode ${ep.episodeNumber || ep.id}`;
+
+  let cleanCover = media.cover || (idx >= 0 ? currentHist[idx].cover : '');
+  if (cleanCover && typeof cleanCover === 'string') {
+    while (cleanCover.includes('/api/image?url=')) {
+      const match = cleanCover.match(/[?&]url=([^&]+)/);
+      if (match) cleanCover = decodeURIComponent(match[1]);
+      else break;
+    }
+  }
 
   const record = {
     id: String(media.id),
     category: String(media.category || 1),
     title: media.title,
-    cover: media.cover,
+    cover: cleanCover || '',
     episodeId: String(ep.id),
     episodeName: epName,
     progressTime: currentTime,
@@ -482,10 +680,9 @@ window.saveWatchProgress = function() {
   };
 
   if (idx >= 0) {
-    currentHist[idx] = record;
-  } else {
-    currentHist.unshift(record);
+    currentHist.splice(idx, 1);
   }
+  currentHist.unshift(record);
 
   localStorage.setItem('loklok_watch_history', JSON.stringify(currentHist));
 
@@ -495,9 +692,12 @@ window.saveWatchProgress = function() {
       headers: { 'Content-Type': 'application/json', 'token': state.token },
       body: JSON.stringify({
         action: 'save',
-        contentId: media.id,
-        category: media.category || 1,
-        episodeId: ep.id,
+        id: String(media.id),
+        category: String(media.category || 1),
+        title: media.title,
+        cover: media.cover || '',
+        episodeId: String(ep.id),
+        episodeName: epName,
         progressTime: currentTime,
         totalTime: duration
       })
@@ -519,7 +719,7 @@ window.closePlayerModal = function() {
   closeModal('modal-player');
 };
 
-// Global Esc key binding to close video player instantly
+// Global Esc & 'S' Key bindings for video player
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     const playerModal = document.getElementById('modal-player');
@@ -547,7 +747,6 @@ window.playEpisode = function(mediaArg, epArg) {
   let ep = null;
 
   if (typeof mediaArg === 'object' && mediaArg !== null && mediaArg.episodes) {
-    // Called as playEpisode(mediaObj, epObj_or_epId)
     media = mediaArg;
     state.currentMedia = media;
     if (typeof epArg === 'object' && epArg !== null) {
@@ -556,8 +755,7 @@ window.playEpisode = function(mediaArg, epArg) {
       ep = (media.episodes || []).find(e => String(e.id) === String(epArg) || String(e.episodeNumber) === String(epArg));
     }
   } else {
-    // Called as playEpisode(epId_or_epObj)
-    const targetId = typeof mediaArg === 'object' ? (mediaArg.id || mediaArg.episodeId) : mediaArg;
+    const targetId = (typeof mediaArg === 'object' && mediaArg !== null) ? (mediaArg.id || mediaArg.episodeId) : mediaArg;
     if (media && media.episodes) {
       ep = media.episodes.find(e => String(e.id) === String(targetId) || String(e.episodeNumber) === String(targetId));
     }
@@ -572,11 +770,12 @@ window.playEpisode = function(mediaArg, epArg) {
     return;
   }
 
-  // Race condition guard: increment lock, capture current value
   const thisLock = ++_playEpisodeLock;
 
   state.currentEpisode = ep;
   window.state = state;
+
+  try { saveWatchProgress(true); } catch (_) {}
 
   if (media && media.title) {
     updatePageTitleAndUrl(media, ep.name || `Episode ${ep.episodeNumber || 1}`);
@@ -585,11 +784,16 @@ window.playEpisode = function(mediaArg, epArg) {
   const titleText = document.getElementById('player-title-text');
   if (titleText) titleText.innerText = `${media.title} • ${ep.name || 'Episode'}`;
 
+  if (typeof updatePlayerRightSidebar === 'function') {
+    updatePlayerRightSidebar();
+  }
+
   const playerModal = document.getElementById('modal-player');
-  playerModal.classList.add('active');
+  if (playerModal) playerModal.classList.add('active');
 
   const container = document.getElementById('player-container');
-  container.innerHTML = '<div class="spinner"></div>';
+  const mount = document.getElementById('plyr-video-mount') || container;
+  mount.innerHTML = '<div class="spinner"></div>';
 
   // Cleanup any existing player before starting new one
   clearInterval(state.progressInterval);
@@ -635,7 +839,7 @@ window.playEpisode = function(mediaArg, epArg) {
   }
 
   fetchPromise
-    .then(data => {
+    .then(async data => {
       const targetStreamUrl = data.streamUrl || data.playUrl || ep.embedUrl || data.embedUrl || media.embedUrl || '';
       const isEmbed = !!(data.embedUrl || ep.embedUrl || media.embedUrl || (data.streamType === 'embed'));
 
@@ -646,15 +850,52 @@ window.playEpisode = function(mediaArg, epArg) {
 
       if (isEmbed) {
         const embedSrc = data.embedUrl || ep.embedUrl || media.embedUrl || targetStreamUrl;
-        container.innerHTML = `<iframe src="${embedSrc}" style="width:100%;height:100%;min-height:500px;border:none;border-radius:16px;" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
-        return;
+        try {
+          const resolveRes = await fetch(`/api/resolve-embed?url=${encodeURIComponent(embedSrc)}`);
+          const resolveData = await resolveRes.json();
+          if (resolveData.success && resolveData.streamUrl) {
+            data.streamUrl = `/api/stream?url=${encodeURIComponent(resolveData.streamUrl)}&referer=${encodeURIComponent(resolveData.referer || '')}`;
+            data.playUrl = data.streamUrl;
+            data.streamType = resolveData.streamType || 'hls';
+            if (resolveData.subtitles && resolveData.subtitles.length > 0) {
+              data.subtitles = resolveData.subtitles;
+            }
+          } else {
+            container.innerHTML = `<iframe src="${embedSrc}" style="width:100%;height:100%;min-height:500px;border:none;border-radius:16px;" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
+            return;
+          }
+        } catch (_) {
+          container.innerHTML = `<iframe src="${embedSrc}" style="width:100%;height:100%;min-height:500px;border:none;border-radius:16px;" allowfullscreen allow="autoplay; encrypted-media"></iframe>`;
+          return;
+        }
       }
 
       // Detect if item is a vertical short drama
       const modalContainer = document.querySelector('.player-modal-container');
-      const isShortDrama = isNarto || media.category === 'MINISERIES' || media.domainType === 'SHORT' || state.filters.params === 'MINISERIES';
+      const catStr = String(media.category || media.domainType || '').toUpperCase();
+      const titleStr = String(media.title || '').toLowerCase();
+      const isShortDrama = isNarto || catStr.includes('SHORT') || catStr.includes('MINISERIES') || titleStr.includes('short') || state.filters.params === 'MINISERIES';
+
       if (modalContainer) {
-        modalContainer.style.maxWidth = isShortDrama ? '460px' : '1000px';
+        if (isShortDrama) {
+          modalContainer.classList.add('is-shorts-mode');
+          modalContainer.classList.remove('is-fullview-mode');
+          modalContainer.style.width = '100%';
+          modalContainer.style.maxWidth = '440px';
+          modalContainer.style.height = '90vh';
+          modalContainer.style.maxHeight = '880px';
+          modalContainer.style.borderRadius = '24px';
+          modalContainer.style.margin = 'auto';
+        } else {
+          modalContainer.classList.add('is-fullview-mode');
+          modalContainer.classList.remove('is-shorts-mode');
+          modalContainer.style.width = '100vw';
+          modalContainer.style.height = '100vh';
+          modalContainer.style.maxWidth = '100vw';
+          modalContainer.style.maxHeight = '100vh';
+          modalContainer.style.borderRadius = '0px';
+          modalContainer.style.margin = '0';
+        }
       }
 
       // Cleanup existing player instance cleanly
@@ -684,12 +925,13 @@ window.playEpisode = function(mediaArg, epArg) {
       videoEl.id = 'wox-video-player';
       videoEl.controls = true;
       videoEl.playsInline = true;
+      videoEl.crossOrigin = 'anonymous';
       videoEl.style.width = '100%';
       videoEl.style.height = '100%';
       videoEl.style.borderRadius = '16px';
 
       // Read saved caption preferences from LocalStorage
-      const savedCaptionEnabled = localStorage.getItem('loklok_caption_enabled') === 'true';
+      const savedCaptionEnabled = localStorage.getItem('loklok_caption_enabled') !== 'false';
       const savedCaptionLang = localStorage.getItem('loklok_caption_lang') || 'en';
 
       const subtitleList = data.subtitles || [];
@@ -702,9 +944,11 @@ window.playEpisode = function(mediaArg, epArg) {
         track.label = trackLabel;
         track.srclang = trackLang;
         
-        let subUrl = sub.url || '';
-        if (subUrl.startsWith('http://') || subUrl.startsWith('https://')) {
-          subUrl = `/api/subtitle?url=${encodeURIComponent(subUrl)}`;
+        let subUrl = sub.url || sub.rawUrl || '';
+        if (subUrl && (subUrl.startsWith('http://') || subUrl.startsWith('https://'))) {
+          if (!subUrl.includes('/api/subtitle')) {
+            subUrl = `/api/subtitle?url=${encodeURIComponent(subUrl)}`;
+          }
         }
         track.src = subUrl;
 
@@ -718,8 +962,42 @@ window.playEpisode = function(mediaArg, epArg) {
         videoEl.appendChild(track);
       });
 
-      container.innerHTML = '';
-      container.appendChild(videoEl);
+      const mount = document.getElementById('plyr-video-mount') || container;
+      mount.innerHTML = '';
+      mount.appendChild(videoEl);
+
+      const currentEps = (media && media.episodes && media.episodes.length > 0) ? media.episodes : (data.episodes || [ep]);
+      state.currentEpisodes = currentEps;
+
+      // Populate Episode Drawer Grid
+      const drawerGrid = document.getElementById('player-drawer-episodes-grid');
+      const epBtn = document.getElementById('player-episodes-btn');
+      if (drawerGrid && currentEps.length > 1) {
+        if (epBtn) epBtn.style.display = 'inline-flex';
+        drawerGrid.innerHTML = currentEps.map(e => {
+          const isCur = String(e.id) === String(ep.id);
+          return `
+            <button class="btn btn-glass" onclick="playEpisodeFromDrawer('${e.id}')" style="padding:0.4rem; font-size:0.75rem; font-weight:700; ${isCur ? 'border-color:var(--neon-cyan); background:rgba(0,255,255,0.25); color:#00ffff;' : 'color:#fff;'}">
+              Ep ${e.number || e.name || e.id}
+            </button>
+          `;
+        }).join('');
+      } else if (epBtn) {
+        epBtn.style.display = 'none';
+      }
+
+      if (typeof updatePlayerRightSidebar === 'function') {
+        updatePlayerRightSidebar();
+      }
+
+      // Populate Subtitle Track Dropdown Options in Modal
+      const subSelect = document.getElementById('player-sub-track-select');
+      if (subSelect) {
+        subSelect.innerHTML = '<option value="-1">Off (No Subtitles)</option>' + subtitleList.map((sub, idx) => {
+          const trackLabel = sub.label || sub.html || `Subtitle ${idx + 1}`;
+          return `<option value="${idx}" ${idx === 0 ? 'selected' : ''}>${escapeHtml(trackLabel)}</option>`;
+        }).join('');
+      }
 
       let rawSourceUrl = targetStreamUrl;
       let playUrl = rawSourceUrl;
@@ -731,8 +1009,26 @@ window.playEpisode = function(mediaArg, epArg) {
         }
       }
 
-      // Prepare Quality resolution options for Plyr settings menu
+      // Prepare Quality resolution options for Plyr settings menu and Loklok stream switcher
       const rawQualities = data.qualities || [];
+      state.currentQualities = rawQualities;
+      const qualDropdown = document.getElementById('player-quality-dropdown');
+      const qualLabel = document.getElementById('current-quality-label');
+      const qualWrap = document.getElementById('player-quality-btn-wrap');
+
+      if (rawQualities.length > 0) {
+        if (qualWrap) qualWrap.style.display = 'inline-block';
+        if (qualLabel) qualLabel.innerText = rawQualities[0].label || rawQualities[0].code || '1080p HD';
+
+        if (qualDropdown) {
+          qualDropdown.innerHTML = rawQualities.map((item, idx) => `
+            <div style="padding:0.4rem 0.65rem; font-size:0.8rem; font-weight:700; color:#fff; cursor:pointer; border-radius:6px; transition:all 0.2s;" onmouseover="this.style.background='rgba(56,189,248,0.2)'" onmouseout="this.style.background='transparent'" onclick="selectPlayerQuality(${idx})">
+              🎥 ${escapeHtml(item.label || item.code)} ${item.sizeFormatted ? `<span style="font-size:0.72rem; color:var(--text-muted); font-weight:400;">(${item.sizeFormatted})</span>` : ''}
+            </div>
+          `).join('');
+        }
+      }
+
       const standardTiers = [1080, 720, 480, 360];
       const qualityOptions = rawQualities.length > 0 
         ? rawQualities.map((_, idx) => standardTiers[idx] || (360 - idx * 60))
@@ -743,10 +1039,29 @@ window.playEpisode = function(mediaArg, epArg) {
         if (!modalContainer) return;
         const w = videoEl.videoWidth || 16;
         const h = videoEl.videoHeight || 9;
-        if (h > w) {
-          modalContainer.style.maxWidth = '480px';
+        const isShorts = (h > w) || (media && String(media.category || '').toLowerCase().includes('short'));
+
+        if (isShorts) {
+          modalContainer.classList.add('is-shorts-mode');
+          modalContainer.classList.remove('is-fullview-mode');
+          modalContainer.style.maxWidth = '440px';
+          modalContainer.style.height = '90vh';
+          modalContainer.style.maxHeight = '880px';
+          modalContainer.style.borderRadius = '24px';
+          modalContainer.style.margin = 'auto';
+          videoEl.style.objectFit = 'cover';
         } else {
-          modalContainer.style.maxWidth = '1000px';
+          modalContainer.classList.add('is-fullview-mode');
+          modalContainer.classList.remove('is-shorts-mode');
+          modalContainer.style.width = '100vw';
+          modalContainer.style.height = '100vh';
+          modalContainer.style.maxWidth = '100vw';
+          modalContainer.style.maxHeight = '100vh';
+          modalContainer.style.borderRadius = '0px';
+          modalContainer.style.margin = '0';
+          if (!state.currentAspectRatio || state.currentAspectRatio === 'Original Ratio') {
+            videoEl.style.objectFit = 'contain';
+          }
         }
       });
 
@@ -845,7 +1160,6 @@ window.playEpisode = function(mediaArg, epArg) {
 
         hls.on(Hls.Events.MANIFEST_PARSED, (event, hlsData) => {
           if (hlsData && hlsData.levels && hlsData.levels.length > 0) {
-            // Support both landscape (1920x1080) and portrait (1080x1920) video resolutions
             const parsedLevels = hlsData.levels.map(l => {
               const res = (l.width && l.height) ? Math.min(l.width, l.height) : (l.height || l.width || 0);
               return { height: res, levelIdx: hlsData.levels.indexOf(l) };
@@ -853,20 +1167,20 @@ window.playEpisode = function(mediaArg, epArg) {
 
             if (parsedLevels.length > 0) {
               const sortedQualityOptions = Array.from(new Set(parsedLevels.map(l => l.height))).sort((a, b) => b - a);
-              
-              plyr.config.quality = {
-                default: sortedQualityOptions[0],
-                options: sortedQualityOptions,
-                forced: true,
-                onChange: (selectedQual) => {
-                  try { window.saveWatchProgress(); } catch (_) {}
-                  const targetLevel = parsedLevels.find(l => l.height === selectedQual);
-                  if (targetLevel) {
-                    hls.currentLevel = targetLevel.levelIdx;
-                    showToast(`Switched quality to ${selectedQual}p 🎥`);
-                  }
-                }
-              };
+              state.availableQualities = sortedQualityOptions;
+
+              const qualDropdown = document.getElementById('player-quality-dropdown');
+              const qualLabel = document.getElementById('current-quality-label');
+              if (qualLabel) qualLabel.innerText = `${sortedQualityOptions[0]}p HD`;
+
+              if (qualDropdown) {
+                qualDropdown.innerHTML = '<div style="padding:0.35rem 0.6rem; font-size:0.8rem; font-weight:600; color:#38bdf8; cursor:pointer; border-radius:4px;" onclick="selectPlayerQuality(-1)">⚡ Auto (Adaptive)</div>' +
+                  sortedQualityOptions.map(q => `
+                    <div style="padding:0.35rem 0.6rem; font-size:0.8rem; font-weight:600; color:#fff; cursor:pointer; border-radius:4px; transition:background 0.2s;" onmouseover="this.style.background='rgba(56,189,248,0.15)'" onmouseout="this.style.background='transparent'" onclick="selectPlayerQuality(${q})">
+                      🎥 ${q}p ${q >= 720 ? 'HD' : 'SD'}
+                    </div>
+                  `).join('');
+              }
             }
           }
         });
@@ -973,6 +1287,145 @@ window.playEpisode = function(mediaArg, epArg) {
             plyrControls.prepend(nextBtn);
             plyrControls.prepend(prevBtn);
           }
+
+          // Inject Quality, Audio Boost, Subtitle Settings, and Episode Drawer buttons into Plyr bottom control bar beside settings gear
+          const settingsBtn = plyrControls.querySelector('[data-plyr="settings"]');
+          if (settingsBtn && !plyrControls.querySelector('.wox-plyr-qual-btn')) {
+            const qualBarBtn = document.createElement('button');
+            qualBarBtn.type = 'button';
+            qualBarBtn.className = 'plyr__control wox-plyr-qual-btn';
+            qualBarBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>';
+            qualBarBtn.title = 'Video Resolution Quality (🎥)';
+            qualBarBtn.onclick = (e) => {
+              e.stopPropagation();
+              if (typeof window.toggleQualityDropdown === 'function') window.toggleQualityDropdown(e);
+            };
+
+            const boostBarBtn = document.createElement('button');
+            boostBarBtn.type = 'button';
+            boostBarBtn.className = 'plyr__control wox-plyr-boost-btn';
+            boostBarBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+            boostBarBtn.title = 'Audio Volume Booster (🔊)';
+            boostBarBtn.onclick = (e) => {
+              e.stopPropagation();
+              if (typeof window.toggleVolBoostDropdown === 'function') window.toggleVolBoostDropdown(e);
+            };
+
+            const subBarBtn = document.createElement('button');
+            subBarBtn.type = 'button';
+            subBarBtn.className = 'plyr__control wox-plyr-sub-btn';
+            subBarBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+            subBarBtn.title = 'Subtitle & Caption Settings (💬)';
+            subBarBtn.onclick = (e) => {
+              e.stopPropagation();
+              if (typeof window.toggleSubtitleSettingsModal === 'function') window.toggleSubtitleSettingsModal(e);
+            };
+
+            const epBarBtn = document.createElement('button');
+            epBarBtn.type = 'button';
+            epBarBtn.className = 'plyr__control wox-plyr-ep-btn';
+            epBarBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
+            epBarBtn.title = 'Episode List Drawer (📺)';
+            epBarBtn.onclick = (e) => {
+              e.stopPropagation();
+              if (typeof window.togglePlayerEpisodeDrawer === 'function') window.togglePlayerEpisodeDrawer(e);
+            };
+
+            const partyBarBtn = document.createElement('button');
+            partyBarBtn.type = 'button';
+            partyBarBtn.className = 'plyr__control wox-plyr-party-btn';
+            partyBarBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>';
+            partyBarBtn.title = 'Stream Party Watch Together (🎉)';
+            partyBarBtn.onclick = (e) => {
+              e.stopPropagation();
+              if (typeof window.openStreamPartyModal === 'function') window.openStreamPartyModal();
+            };
+
+            settingsBtn.parentNode.insertBefore(partyBarBtn, settingsBtn);
+            settingsBtn.parentNode.insertBefore(epBarBtn, settingsBtn);
+            settingsBtn.parentNode.insertBefore(subBarBtn, settingsBtn);
+            settingsBtn.parentNode.insertBefore(boostBarBtn, settingsBtn);
+            settingsBtn.parentNode.insertBefore(qualBarBtn, settingsBtn);
+
+            // Inject custom options directly into Plyr's internal settings gear menu (.plyr__menu__container)
+            settingsBtn.addEventListener('click', () => {
+              setTimeout(() => {
+                const menuContainer = container.querySelector('.plyr__menu__container [role="menu"]');
+                if (menuContainer) {
+                  // 1. Inject Stream Party Menu Item if missing
+                  if (!menuContainer.querySelector('.wox-plyr-party-menu-item')) {
+                    const partyItem = document.createElement('button');
+                    partyItem.type = 'button';
+                    partyItem.className = 'plyr__control wox-plyr-party-menu-item';
+                    partyItem.setAttribute('role', 'menuitem');
+                    partyItem.innerHTML = `<span>🎉 Stream Party</span><span class="plyr__menu__value" style="margin-left:auto; font-weight:700; color:#facc15;">Watch Together ›</span>`;
+                    partyItem.onclick = (ev) => {
+                      ev.stopPropagation();
+                      if (typeof window.openStreamPartyModal === 'function') window.openStreamPartyModal();
+                    };
+                    menuContainer.prepend(partyItem);
+                  }
+
+                  // 2. Inject Episodes Menu Item if missing
+                  if (!menuContainer.querySelector('.wox-plyr-ep-menu-item')) {
+                    const epMenuItem = document.createElement('button');
+                    epMenuItem.type = 'button';
+                    epMenuItem.className = 'plyr__control wox-plyr-ep-menu-item';
+                    epMenuItem.setAttribute('role', 'menuitem');
+                    epMenuItem.innerHTML = `<span>📺 Episodes</span><span class="plyr__menu__value" style="margin-left:auto; font-weight:700; color:#00ffff;">Ep ${(ep && (ep.number || ep.name || ep.id)) || 1} ›</span>`;
+                    epMenuItem.onclick = (ev) => {
+                      ev.stopPropagation();
+                      if (typeof window.togglePlayerEpisodeDrawer === 'function') window.togglePlayerEpisodeDrawer(ev);
+                    };
+                    const partyRef = menuContainer.querySelector('.wox-plyr-party-menu-item') || menuContainer.firstChild;
+                    if (partyRef && partyRef.nextSibling) {
+                      menuContainer.insertBefore(epMenuItem, partyRef.nextSibling);
+                    } else {
+                      menuContainer.appendChild(epMenuItem);
+                    }
+                  }
+
+                  // 2. Inject Audio & Volume Boost Menu Item if missing
+                  if (!menuContainer.querySelector('.wox-plyr-audio-menu-item')) {
+                    const audioMenuItem = document.createElement('button');
+                    audioMenuItem.type = 'button';
+                    audioMenuItem.className = 'plyr__control wox-plyr-audio-menu-item';
+                    audioMenuItem.setAttribute('role', 'menuitem');
+                    audioMenuItem.innerHTML = `<span>🔊 Audio & Boost</span><span class="plyr__menu__value" style="margin-left:auto; font-weight:700; color:#38bdf8;">100% Boost ›</span>`;
+                    audioMenuItem.onclick = (ev) => {
+                      ev.stopPropagation();
+                      if (typeof window.toggleVolBoostDropdown === 'function') window.toggleVolBoostDropdown(ev);
+                    };
+                    const targetRef = menuContainer.querySelector('.wox-plyr-ep-menu-item') || menuContainer.firstChild;
+                    if (targetRef && targetRef.nextSibling) {
+                      menuContainer.insertBefore(audioMenuItem, targetRef.nextSibling);
+                    } else {
+                      menuContainer.appendChild(audioMenuItem);
+                    }
+                  }
+
+                  // 4. Inject Aspect Ratio Menu Item if missing
+                  if (!menuContainer.querySelector('.wox-plyr-aspect-menu-item')) {
+                    const aspectItem = document.createElement('button');
+                    aspectItem.type = 'button';
+                    aspectItem.className = 'plyr__control wox-plyr-aspect-menu-item';
+                    aspectItem.setAttribute('role', 'menuitem');
+                    aspectItem.innerHTML = `<span>📐 Aspect Ratio</span><span class="plyr__menu__value" id="aspect-ratio-val" style="margin-left:auto; font-weight:700; color:#4ade80;">Original Ratio ›</span>`;
+                    aspectItem.onclick = (ev) => {
+                      ev.stopPropagation();
+                      if (typeof window.cycleVideoAspectRatio === 'function') window.cycleVideoAspectRatio();
+                    };
+                    const subRef = menuContainer.querySelector('.wox-plyr-substyle-menu-item') || menuContainer.firstChild;
+                    if (subRef && subRef.nextSibling) {
+                      menuContainer.insertBefore(aspectItem, subRef.nextSibling);
+                    } else {
+                      menuContainer.appendChild(aspectItem);
+                    }
+                  }
+                }
+              }, 50);
+            });
+          }
         }
       });
 
@@ -1043,6 +1496,448 @@ window.playNextEpisode = function() {
   playEpisode(media, nextEp);
 };
 
+window.togglePlayerEpisodeDrawer = function(e) {
+  if (e) e.stopPropagation();
+  const drawer = document.getElementById('player-episodes-drawer');
+  const subModal = document.getElementById('player-sub-modal');
+  const qualBar = document.getElementById('player-landscape-quality-bar');
+  const boostBar = document.getElementById('player-landscape-boost-bar');
+  if (subModal) subModal.style.display = 'none';
+  if (qualBar) qualBar.style.display = 'none';
+  if (boostBar) boostBar.style.display = 'none';
+  if (drawer) {
+    const isHidden = window.getComputedStyle(drawer).display === 'none' || drawer.style.display === 'none';
+    drawer.style.display = isHidden ? 'flex' : 'none';
+  }
+};
+
+window.toggleSubtitleSettingsModal = function(e) {
+  if (e) e.stopPropagation();
+  const subModal = document.getElementById('player-sub-modal');
+  const drawer = document.getElementById('player-episodes-drawer');
+  const qualBar = document.getElementById('player-landscape-quality-bar');
+  const boostBar = document.getElementById('player-landscape-boost-bar');
+  if (drawer) drawer.style.display = 'none';
+  if (qualBar) qualBar.style.display = 'none';
+  if (boostBar) boostBar.style.display = 'none';
+  if (subModal) {
+    const isHidden = window.getComputedStyle(subModal).display === 'none' || subModal.style.display === 'none';
+    subModal.style.display = isHidden ? 'block' : 'none';
+  }
+};
+
+window.toggleQualityDropdown = function(e) {
+  if (e) e.stopPropagation();
+  const qualBar = document.getElementById('player-landscape-quality-bar');
+  const boostBar = document.getElementById('player-landscape-boost-bar');
+  const drawer = document.getElementById('player-episodes-drawer');
+  const subModal = document.getElementById('player-sub-modal');
+  if (boostBar) boostBar.style.display = 'none';
+  if (drawer) drawer.style.display = 'none';
+  if (subModal) subModal.style.display = 'none';
+
+  if (qualBar) {
+    const isHidden = window.getComputedStyle(qualBar).display === 'none' || qualBar.style.display === 'none';
+    qualBar.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) {
+      const pillsRow = document.getElementById('player-quality-pills-row');
+      const qualities = state.currentQualities || [];
+      if (pillsRow && qualities.length > 0) {
+        pillsRow.innerHTML = qualities.map((item, idx) => `
+          <button class="btn btn-glass" onclick="selectPlayerQuality(${idx})" style="padding:0.4rem 0.8rem; font-size:0.8rem; font-weight:700; color:#fff; border-color:rgba(56,189,248,0.4);">
+            🎥 ${escapeHtml(item.label || item.code)} ${item.sizeFormatted ? `<span style="font-size:0.72rem; color:var(--text-muted);">(${item.sizeFormatted})</span>` : ''}
+          </button>
+        `).join('');
+      } else if (pillsRow) {
+        const hlsLevels = (state.hlsInstance && state.hlsInstance.levels) ? state.hlsInstance.levels : [];
+        const uniqueHls = Array.from(new Set(hlsLevels.map(l => (l.width && l.height) ? Math.min(l.width, l.height) : (l.height || l.width || 0)))).sort((a, b) => b - a);
+        pillsRow.innerHTML = '<button class="btn btn-glass" onclick="selectPlayerQuality(-1)" style="padding:0.4rem 0.8rem; font-size:0.8rem; font-weight:700; color:#00ffff;">⚡ Auto</button>' +
+          (uniqueHls.length > 0 ? uniqueHls : [1080, 720, 480, 360]).map(q => `
+            <button class="btn btn-glass" onclick="selectPlayerQuality(${q})" style="padding:0.4rem 0.8rem; font-size:0.8rem; font-weight:700; color:#fff;">
+              🎥 ${q}p
+            </button>
+          `).join('');
+      }
+    }
+  }
+};
+
+window.toggleVolBoostDropdown = function(e) {
+  if (e) e.stopPropagation();
+  const boostBar = document.getElementById('player-landscape-boost-bar');
+  const qualBar = document.getElementById('player-landscape-quality-bar');
+  const drawer = document.getElementById('player-episodes-drawer');
+  const subModal = document.getElementById('player-sub-modal');
+  if (qualBar) qualBar.style.display = 'none';
+  if (drawer) drawer.style.display = 'none';
+  if (subModal) subModal.style.display = 'none';
+
+  if (boostBar) {
+    const isHidden = window.getComputedStyle(boostBar).display === 'none' || boostBar.style.display === 'none';
+    boostBar.style.display = isHidden ? 'block' : 'none';
+  }
+};
+
+window.playEpisodeFromDrawer = function(epId) {
+  const drawer = document.getElementById('player-episodes-drawer');
+  if (drawer) drawer.style.display = 'none';
+  const episodes = state.currentEpisodes || (state.currentMedia ? state.currentMedia.episodes : []);
+  const ep = (episodes || []).find(e => String(e.id) === String(epId));
+  if (ep && state.currentMedia) {
+    playVideo(state.currentMedia, ep);
+  }
+};
+
+window.togglePlayerRightSidebar = function(e) {
+  if (e) e.stopPropagation();
+  const sb = document.getElementById('player-right-sidebar');
+  if (!sb) return;
+  const isOpen = sb.style.display !== 'none' && sb.style.display !== '';
+  sb.style.display = isOpen ? 'none' : 'flex';
+  if (!isOpen && typeof updatePlayerRightSidebar === 'function') {
+    updatePlayerRightSidebar();
+  }
+};
+
+window.switchPlayerSidebarTab = function(tab) {
+  const epTab = document.getElementById('psb-tab-episodes');
+  const relTab = document.getElementById('psb-tab-related');
+  const epContent = document.getElementById('psb-content-episodes');
+  const relContent = document.getElementById('psb-content-related');
+
+  if (tab === 'episodes') {
+    if (epTab) epTab.classList.add('active');
+    if (relTab) relTab.classList.remove('active');
+    if (epContent) epContent.style.display = 'block';
+    if (relContent) relContent.style.display = 'none';
+  } else {
+    if (relTab) relTab.classList.add('active');
+    if (epTab) epTab.classList.remove('active');
+    if (relContent) relContent.style.display = 'block';
+    if (epContent) epContent.style.display = 'none';
+  }
+};
+
+window.updatePlayerRightSidebar = async function() {
+  const media = state.currentMedia;
+  const currentEp = state.currentEpisode;
+  const epGrid = document.getElementById('psb-episodes-grid');
+  const relList = document.getElementById('psb-related-list');
+
+  if (!media) return;
+
+  // 1. Populate Episodes Grid
+  if (epGrid) {
+    const episodes = media.episodes || [];
+    if (episodes.length === 0) {
+      epGrid.innerHTML = '<div style="grid-column:1/-1;color:rgba(255,255,255,0.5);font-size:0.8rem;text-align:center;padding:1rem;">No episode list available.</div>';
+    } else {
+      epGrid.innerHTML = episodes.map((e, idx) => {
+        const isCur = currentEp && (String(e.id) === String(currentEp.id) || String(e.episodeNumber) === String(currentEp.episodeNumber));
+        const epName = e.seriesNo ? `Ep ${e.seriesNo}` : (e.name || `Ep ${idx + 1}`);
+        
+        return `
+          <button class="btn btn-glass" onclick="playEpisodeFromDrawer('${e.id}')" style="padding:0.45rem 0.2rem; font-size:0.75rem; font-weight:700; text-align:center; border-radius:6px; ${isCur ? 'border-color:#00ffff; background:rgba(0,255,255,0.25); color:#00ffff; box-shadow:0 0 8px rgba(0,255,255,0.4);' : 'color:#fff; background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.1);'}" title="${escapeHtml(e.name || epName)}">
+            ${escapeHtml(epName)}
+          </button>
+        `;
+      }).join('');
+    }
+  }
+
+  // 2. Populate Related List
+  if (relList) {
+    let relatedItems = [];
+    if (Array.isArray(media.likeList) && media.likeList.length > 0) {
+      relatedItems = relatedItems.concat(media.likeList);
+    }
+    if (Array.isArray(media.relatedList) && media.relatedList.length > 0) {
+      relatedItems = relatedItems.concat(media.relatedList);
+    }
+
+    // Deduplicate by ID
+    const uniqueMap = new Map();
+    relatedItems.forEach(item => {
+      if (item && item.id && !uniqueMap.has(String(item.id)) && String(item.id) !== String(media.id)) {
+        uniqueMap.set(String(item.id), item);
+      }
+    });
+
+    let finalRelated = Array.from(uniqueMap.values());
+
+    // Fallback if detail API didn't return recommendations
+    if (finalRelated.length === 0) {
+      try {
+        const queryTerm = (media.title || '').split(' ')[0] || 'popular';
+        const searchRes = await fetch(`/api/search?q=${encodeURIComponent(queryTerm)}`);
+        const searchData = await searchRes.json();
+        if (searchData.success && Array.isArray(searchData.results)) {
+          finalRelated = searchData.results.filter(r => String(r.id) !== String(media.id)).slice(0, 10);
+        }
+      } catch (_) {}
+    }
+
+    if (finalRelated.length === 0) {
+      relList.innerHTML = '<div style="color:rgba(255,255,255,0.5);font-size:0.8rem;text-align:center;padding:1rem;">No related recommendations available.</div>';
+    } else {
+      relList.innerHTML = finalRelated.map(item => `
+        <div class="psb-related-card" onclick="openDetailModal('${item.id}', '${item.category || 1}')">
+          <img class="psb-related-img" src="${item.cover}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="handleImgError(this)">
+          <div class="psb-related-info">
+            <div class="psb-related-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
+            <div class="psb-related-meta">⭐ ${item.score || '8.5'} • Click to Watch</div>
+          </div>
+        </div>
+      `).join('');
+    }
+  }
+};
+
+window.changeSubtitleTrack = function(trackIdx) {
+  if (!state.plyrPlayer) return;
+  const idx = parseInt(trackIdx, 10);
+  if (idx === -1) {
+    state.plyrPlayer.currentTrack = -1;
+    state.plyrPlayer.toggleCaptions(false);
+    showToast('Subtitles turned Off');
+  } else {
+    state.plyrPlayer.currentTrack = idx;
+    state.plyrPlayer.toggleCaptions(true);
+    showToast(`Subtitle track set to #${idx + 1}`);
+  }
+};
+
+window.setVideoAspectRatio = function(mode) {
+  state.currentAspectRatio = mode;
+  const labelEls = document.querySelectorAll('#aspect-ratio-val');
+  labelEls.forEach(lbl => { lbl.innerText = `${mode} ›`; });
+
+  let styleEl = document.getElementById('custom-aspect-ratio-style');
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'custom-aspect-ratio-style';
+    document.head.appendChild(styleEl);
+  }
+
+  const targets = 'html body #player-container video, html body .plyr video, html body .plyr__video-wrapper video, html body .plyr-wrapper video';
+
+  if (mode === 'Scale to Fit') {
+    styleEl.innerHTML = `
+      ${targets} { object-fit: cover !important; aspect-ratio: auto !important; width: 100% !important; height: 100% !important; }
+    `;
+  } else if (mode === 'Stretch to Fill') {
+    styleEl.innerHTML = `
+      ${targets} { object-fit: fill !important; aspect-ratio: auto !important; width: 100% !important; height: 100% !important; }
+    `;
+  } else if (mode === '16:9') {
+    styleEl.innerHTML = `
+      ${targets} { object-fit: cover !important; aspect-ratio: 16 / 9 !important; width: 100% !important; height: 100% !important; }
+    `;
+  } else if (mode === '4:3') {
+    styleEl.innerHTML = `
+      ${targets} { object-fit: cover !important; aspect-ratio: 4 / 3 !important; width: 100% !important; height: 100% !important; }
+    `;
+  } else {
+    // Original Ratio (default)
+    styleEl.innerHTML = `
+      ${targets} { object-fit: contain !important; aspect-ratio: auto !important; width: 100% !important; height: 100% !important; }
+    `;
+  }
+
+  const videoEl = document.querySelector('#player-container video');
+  if (videoEl) {
+    if (mode === 'Scale to Fit') videoEl.style.setProperty('object-fit', 'cover', 'important');
+    else if (mode === 'Stretch to Fill') videoEl.style.setProperty('object-fit', 'fill', 'important');
+    else if (mode === '16:9' || mode === '4:3') videoEl.style.setProperty('object-fit', 'cover', 'important');
+    else videoEl.style.setProperty('object-fit', 'contain', 'important');
+  }
+
+  showToast(`Aspect ratio set to ${mode} 📐`);
+};
+
+window.cycleVideoAspectRatio = function() {
+  const modes = ['Original Ratio', 'Scale to Fit', 'Stretch to Fill', '16:9', '4:3'];
+  const curMode = state.currentAspectRatio || 'Original Ratio';
+  const curIdx = modes.indexOf(curMode);
+  const nextMode = modes[(curIdx + 1) % modes.length];
+  window.setVideoAspectRatio(nextMode);
+};
+
+window.setSubtitleSize = function(size) {
+  const lbl = document.getElementById('sub-fontsize-val');
+  if (lbl) lbl.innerText = size;
+  const slider = document.getElementById('sub-fontsize-slider');
+  if (slider) slider.value = parseInt(size, 10) || 18;
+
+  let styleEl = document.getElementById('custom-sub-style');
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'custom-sub-style';
+    document.head.appendChild(styleEl);
+  }
+  styleEl.innerHTML = `.plyr__captions { font-size: ${size} !important; } .plyr__caption { font-size: ${size} !important; }`;
+};
+
+window.setSubtitleTextBorder = function(borderVal) {
+  const lbl = document.getElementById('sub-border-val');
+  if (lbl) lbl.innerText = borderVal;
+  const slider = document.getElementById('sub-border-slider');
+  if (slider) slider.value = parseFloat(borderVal) || 2;
+
+  let styleEl = document.getElementById('custom-sub-border-style');
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'custom-sub-border-style';
+    document.head.appendChild(styleEl);
+  }
+  const pxVal = parseFloat(borderVal) || 0;
+  styleEl.innerHTML = `.plyr__caption { -webkit-text-stroke: ${pxVal}px #000000 !important; text-shadow: 0 0 ${pxVal * 2}px #000000, 0 2px 4px #000000 !important; }`;
+};
+
+window.setSubtitleColor = function(color) {
+  let styleEl = document.getElementById('custom-sub-color-style');
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'custom-sub-color-style';
+    document.head.appendChild(styleEl);
+  }
+  styleEl.innerHTML = `.plyr__caption { color: ${color} !important; }`;
+  showToast('Subtitle text color updated');
+};
+
+window.setSubtitleBottomHeight = function(heightVal) {
+  const lbl = document.getElementById('sub-height-val');
+  if (lbl) lbl.innerText = heightVal;
+
+  let styleEl = document.getElementById('custom-sub-height-style');
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'custom-sub-height-style';
+    document.head.appendChild(styleEl);
+  }
+  styleEl.innerHTML = `.plyr__captions { bottom: ${heightVal} !important; padding-bottom: 0 !important; }`;
+};
+
+window.setSubtitleBgColor = function(rgbStr) {
+  state.subBgColor = rgbStr;
+  window.updateSubtitleBgStyle();
+  showToast('Subtitle background color updated');
+};
+
+window.setSubtitleBgOpacity = function(opacityVal) {
+  state.subBgOpacity = opacityVal;
+  const lbl = document.getElementById('sub-bg-opacity-val');
+  if (lbl) lbl.innerText = `${Math.round(opacityVal * 100)}%`;
+  const slider = document.getElementById('sub-bg-opacity-slider');
+  if (slider) slider.value = Math.round(opacityVal * 100);
+
+  window.updateSubtitleBgStyle();
+};
+
+window.updateSubtitleBgStyle = function() {
+  const rgb = state.subBgColor || '0, 0, 0';
+  const opacity = (typeof state.subBgOpacity === 'number') ? state.subBgOpacity : 0.75;
+
+  let styleEl = document.getElementById('custom-sub-bg-style');
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'custom-sub-bg-style';
+    document.head.appendChild(styleEl);
+  }
+  styleEl.innerHTML = `.plyr__caption { background: rgba(${rgb}, ${opacity}) !important; backdrop-filter: blur(8px); }`;
+};
+
+window.selectPlayerQuality = function(q) {
+  const dropdown = document.getElementById('player-quality-dropdown');
+  const landscapeBar = document.getElementById('player-landscape-quality-bar');
+  const qualLabel = document.getElementById('current-quality-label');
+  if (dropdown) dropdown.style.display = 'none';
+  if (landscapeBar) landscapeBar.style.display = 'none';
+
+  const videoEl = document.getElementById('wox-video-player') || (state.plyrPlayer ? state.plyrPlayer.media : null);
+  const qualities = state.currentQualities || [];
+  
+  // 1. Loklok Discrete Stream Qualities (Match by index or resolution code)
+  let targetQual = null;
+  if (qualities.length > 0) {
+    if (typeof q === 'number' && q >= 0 && q < qualities.length) {
+      targetQual = qualities[q];
+    } else {
+      const qStr = String(q).toLowerCase();
+      targetQual = qualities.find(item => {
+        const codeStr = String(item.code || '').toLowerCase();
+        const labelStr = String(item.label || '').toLowerCase();
+        return codeStr.includes(qStr) || labelStr.includes(qStr);
+      });
+    }
+  }
+
+  if (targetQual && targetQual.rawStreamUrl) {
+    const curTime = (state.plyrPlayer ? state.plyrPlayer.currentTime : (videoEl ? videoEl.currentTime : 0)) || 0;
+    const isPaused = state.plyrPlayer ? state.plyrPlayer.paused : (videoEl ? videoEl.paused : true);
+    let newPlayUrl = targetQual.rawStreamUrl;
+    if (newPlayUrl.startsWith('http://') || newPlayUrl.startsWith('https://')) {
+      if (!newPlayUrl.includes('/api/stream')) {
+        newPlayUrl = `/api/stream?url=${encodeURIComponent(newPlayUrl)}`;
+      }
+    }
+
+    const restoreTime = () => {
+      if (curTime > 0) {
+        try {
+          if (videoEl) videoEl.currentTime = curTime;
+          if (state.plyrPlayer) state.plyrPlayer.currentTime = curTime;
+        } catch (_) {}
+      }
+      if (!isPaused && state.plyrPlayer) {
+        state.plyrPlayer.play().catch(() => {});
+      }
+    };
+
+    if (videoEl) {
+      videoEl.addEventListener('loadedmetadata', restoreTime, { once: true });
+      videoEl.addEventListener('canplay', restoreTime, { once: true });
+
+      if (state.hlsInstance) {
+        state.hlsInstance.loadSource(newPlayUrl);
+        state.hlsInstance.attachMedia(videoEl);
+      } else {
+        videoEl.src = newPlayUrl;
+      }
+    }
+
+    const displayLabel = targetQual.label || targetQual.code || 'HD';
+    if (qualLabel) qualLabel.innerText = displayLabel;
+    showToast(`Switched quality to ${displayLabel} (${targetQual.sizeFormatted || ''}) 🎥`);
+    return;
+  }
+
+  // 2. HLS Adaptive Manifest Switching (for multi-bitrate .m3u8 playlists)
+  if (q === -1 || q === 'auto') {
+    if (state.hlsInstance) state.hlsInstance.currentLevel = -1;
+    if (qualLabel) qualLabel.innerText = 'Auto';
+    showToast('Quality set to Auto (Adaptive) ⚡');
+    return;
+  }
+
+  if (state.hlsInstance && state.hlsInstance.levels && state.hlsInstance.levels.length > 0) {
+    const numQ = parseInt(q, 10);
+    const levelIdx = state.hlsInstance.levels.findIndex(l => {
+      const h = (l.width && l.height) ? Math.min(l.width, l.height) : (l.height || l.width || 0);
+      return h === numQ;
+    });
+    if (levelIdx !== -1) {
+      state.hlsInstance.currentLevel = levelIdx;
+      if (qualLabel) qualLabel.innerText = `${numQ}p`;
+      showToast(`Switched quality to ${numQ}p 🎥`);
+      return;
+    }
+  }
+
+  if (qualLabel) qualLabel.innerText = `${q}p`;
+  showToast(`Quality set to ${q}p 🎥`);
+};
+
 window.openDetailModal = async function(id, category = 1) {
   if (!id || id === 'undefined' || id === 'null') {
     alert('Invalid media item ID.');
@@ -1065,6 +1960,7 @@ window.openDetailModal = async function(id, category = 1) {
       return;
     }
     state.currentMedia = detail;
+    window.state = state;
     updatePageTitleAndUrl(detail);
 
     // Check watch history for previously watched episode
@@ -1123,6 +2019,7 @@ window.openDetailModal = async function(id, category = 1) {
         <div class="detail-info">
           <h1 class="detail-title">${escapeHtml(detail.title)}</h1>
           <div class="detail-tags">
+            ${(() => { const sb = getSourceBadge(detail); return `<span class="tag-badge" style="background:${sb.bg};color:${sb.color};font-weight:700;box-shadow: 0 2px 8px rgba(0,0,0,0.3);">${sb.icon} ${escapeHtml(sb.name)}</span>`; })()}
             ${detail.year ? `<span class="tag-badge">${detail.year}</span>` : ''}
             ${detail.area ? `<span class="tag-badge">${detail.area}</span>` : ''}
             ${detail.genres ? `<span class="tag-badge">${detail.genres}</span>` : ''}
@@ -1140,7 +2037,18 @@ window.openDetailModal = async function(id, category = 1) {
       </div>
 
       <div class="episodes-section">
-        <h3 style="font-size:1.25rem;margin-bottom:0.75rem;">Episodes (${detail.episodes.length})</h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.85rem;flex-wrap:wrap;gap:0.6rem;">
+          <h3 style="font-size:1.25rem;margin:0;" id="episodes-heading-text">Episodes (${detail.episodes.length})</h3>
+          ${(detail.seasons && detail.seasons.length > 1) ? `
+            <div class="season-selector-bar" style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+              <button class="btn btn-glass season-pill active" onclick="filterDetailSeason(0)" id="season-btn-0" style="padding:0.35rem 0.85rem;font-size:0.85rem;border-color:var(--accent-cyan);color:var(--accent-cyan);font-weight:700;">All (${detail.episodes.length})</button>
+              ${detail.seasons.map(s => `
+                <button class="btn btn-glass season-pill" onclick="filterDetailSeason(${s.seasonNumber})" id="season-btn-${s.seasonNumber}" style="padding:0.35rem 0.85rem;font-size:0.85rem;background:rgba(255,255,255,0.05);color:#fff;">Season ${s.seasonNumber} (${s.episodes.length})</button>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+
         <div class="episodes-grid">
           ${detail.episodes.map(ep => {
             const rawName = ep.name || `Episode ${ep.episodeNumber || 1}`;
@@ -1148,9 +2056,10 @@ window.openDetailModal = async function(id, category = 1) {
             const isWatchedEp = watchRecord && String(watchRecord.episodeId) === String(ep.id);
             const progressFormatted = isWatchedEp ? formatTime(watchRecord.progressTime) : null;
             const progressPct = (isWatchedEp && watchRecord.totalTime > 0) ? Math.min(100, Math.round((watchRecord.progressTime / watchRecord.totalTime) * 100)) : 0;
+            const epSeasonNum = ep.seasonNumber || (ep.id && String(ep.id).match(/s(\d+)e/i) ? parseInt(String(ep.id).match(/s(\d+)e/i)[1], 10) : 1);
 
             return `
-              <div class="wox-episode-chip ${isWatchedEp ? 'active-resume' : ''}" onclick="playEpisode('${ep.id}')" title="${escapeHtml(rawName)}${isWatchedEp ? ' - Watched ' + progressFormatted : ''}" style="${isWatchedEp ? 'border-color: #ec4899; background: rgba(236, 72, 153, 0.12);' : ''}">
+              <div class="wox-episode-chip ${isWatchedEp ? 'active-resume' : ''}" data-season="${epSeasonNum}" onclick="playEpisode('${ep.id}')" title="${escapeHtml(rawName)}${isWatchedEp ? ' - Watched ' + progressFormatted : ''}" style="${isWatchedEp ? 'border-color: #ec4899; background: rgba(236, 72, 153, 0.12);' : ''}">
                 <span class="chip-play-icon" style="${isWatchedEp ? 'color:#ec4899;' : ''}">${isWatchedEp ? '⏩' : '▶'}</span>
                 <div style="display:flex;flex-direction:column;flex:1;min-width:0;justify-content:center;">
                   <span class="chip-title">${escapeHtml(displayTitle)}${isWatchedEp ? ` <small style="color:#ec4899;font-weight:700;">(${progressFormatted})</small>` : ''}</span>
@@ -1171,6 +2080,50 @@ window.openDetailModal = async function(id, category = 1) {
     `;
   } catch (err) {
     content.innerHTML = `<p style="padding:2.5rem;color:var(--text-muted);">Error: ${err.message}</p>`;
+  }
+};
+
+window.filterDetailSeason = function(seasonNum) {
+  const detail = state.currentMedia;
+  if (!detail || !detail.episodes) return;
+
+  const chips = document.querySelectorAll('.wox-episode-chip');
+  let visibleCount = 0;
+
+  chips.forEach(chip => {
+    const sNum = parseInt(chip.getAttribute('data-season') || '1', 10);
+    if (seasonNum === 0 || sNum === seasonNum) {
+      chip.style.display = 'flex';
+      visibleCount++;
+    } else {
+      chip.style.display = 'none';
+    }
+  });
+
+  const heading = document.getElementById('episodes-heading-text');
+  if (heading) {
+    heading.innerText = seasonNum === 0 
+      ? `Episodes (${detail.episodes.length})` 
+      : `Season ${seasonNum} Episodes (${visibleCount})`;
+  }
+
+  // Update active pill button styling
+  const btns = document.querySelectorAll('.season-pill');
+  btns.forEach(btn => {
+    btn.classList.remove('active');
+    btn.style.borderColor = 'rgba(255,255,255,0.15)';
+    btn.style.color = '#fff';
+    btn.style.fontWeight = '400';
+    btn.style.background = 'rgba(255,255,255,0.05)';
+  });
+
+  const activeBtn = document.getElementById(`season-btn-${seasonNum}`);
+  if (activeBtn) {
+    activeBtn.classList.add('active');
+    activeBtn.style.borderColor = 'var(--accent-cyan)';
+    activeBtn.style.color = 'var(--accent-cyan)';
+    activeBtn.style.fontWeight = '700';
+    activeBtn.style.background = 'rgba(6, 182, 212, 0.15)';
   }
 };
 
@@ -1664,6 +2617,12 @@ window.handleDbFileImport = async function(event) {
       const merged = Array.from(map.values());
       localStorage.setItem('loklok_watch_history', JSON.stringify(merged));
 
+      const deletedSet = new Set(JSON.parse(localStorage.getItem('loklok_deleted_history') || '[]'));
+      items.forEach(i => {
+        if (i && i.id) deletedSet.delete(String(i.id));
+      });
+      localStorage.setItem('loklok_deleted_history', JSON.stringify(Array.from(deletedSet)));
+
       showToast(`Successfully imported ${items.length} items from JSON backup! 🎉`);
       loadHistory(false);
       return;
@@ -1681,28 +2640,138 @@ window.handleDbFileImport = async function(event) {
     }
     const base64 = btoa(binary);
 
-    const res = await fetch('/api/import-db', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dbBase64: base64 })
-    });
+    let items = [];
+    try {
+      const res = await fetch('/api/import-db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dbBase64: base64 })
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.items)) {
+        items = data.items;
+      }
+    } catch (_) {}
 
-    const data = await res.json();
-    if (!data.success || !Array.isArray(data.items)) {
-      showToast(`Import failed: ${data.error || 'Invalid file format'} ❌`);
+    // Client-side pure JS fallback if server fetch failed or returned 0 items
+    if (items.length === 0) {
+      const isHashKey = (s) => !s || /^[a-f0-9]{12,}$/i.test(s) || /^\d+$/.test(s) || /^(com|org|net|loklok|bff|snssb|android)/i.test(s);
+      const dec = new TextDecoder('utf-8', { fatal: false });
+      const strContent = dec.decode(bytes);
+      const seen = new Set();
+      
+      const jsonRegex = /\{"id":\s*"?(\w+)"?[^}]*?"title":\s*"([^"]+)"[^}]*\}/g;
+      let match;
+      while ((match = jsonRegex.exec(strContent)) !== null) {
+        try {
+          const parsed = JSON.parse(match[0]);
+          const id = String(parsed.id || parsed.subjectId || '');
+          if (id && !seen.has(id)) {
+            seen.add(id);
+            const rawT = parsed.title || parsed.subjectName || '';
+            items.push({
+              id,
+              category: String(parsed.category || '1'),
+              title: isHashKey(rawT) ? `Media #${id}` : rawT.trim(),
+              cover: parsed.cover || parsed.image || '',
+              episodeId: String(parsed.episodeId || ''),
+              episodeName: parsed.episodeName || 'Episode 1',
+              progressTime: Number(parsed.progressTime || parsed.watch_time || 0),
+              totalTime: Number(parsed.totalTime || parsed.duration || 0),
+              updatedAt: Date.now()
+            });
+          }
+        } catch (_) {}
+      }
+
+      if (items.length === 0) {
+        const urlRegex = /(https?:\/\/[^\s"'<>\0\u0000-\u001F]+\.(?:jpg|jpeg|png|webp))/gi;
+        let urlMatch;
+        while ((urlMatch = urlRegex.exec(strContent)) !== null) {
+          const imgUrl = urlMatch[1];
+          const idx = urlMatch.index;
+          const chunk = strContent.slice(Math.max(0, idx - 150), Math.min(strContent.length, idx + 200));
+          const idMatch = chunk.match(/\b(\d{4,8})\b/);
+          if (idMatch && !seen.has(idMatch[1])) {
+            const id = idMatch[1];
+            seen.add(id);
+            items.push({
+              id,
+              category: '1',
+              title: `Media #${id}`,
+              cover: imgUrl,
+              episodeId: '',
+              episodeName: 'Episode 1',
+              progressTime: 0,
+              totalTime: 0,
+              updatedAt: Date.now()
+            });
+          }
+        }
+      }
+
+      // Enrich items with real titles from Loklok detail API
+      for (let i = 0; i < Math.min(items.length, 25); i++) {
+        const item = items[i];
+        if (!item.title || isHashKey(item.title) || item.title.startsWith('Media #') || !item.cover) {
+          try {
+            const detailRes = await fetch(`/api/detail?id=${item.id}&category=${item.category || 1}`);
+            const data = await detailRes.json();
+            if (data && data.success && data.detail) {
+              if (data.detail.title) item.title = data.detail.title;
+              if (data.detail.cover) item.cover = data.detail.cover;
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    if (items.length === 0) {
+      showToast('Import failed: Could not extract valid media records from database file. ❌');
       return;
     }
 
-    // Merge imported items into localStorage
+    // Merge imported items into localStorage by ID & Title
     const localHistory = JSON.parse(localStorage.getItem('loklok_watch_history') || '[]');
     const map = new Map();
-    localHistory.forEach(i => map.set(String(i.id), i));
-    data.items.forEach(i => map.set(String(i.id), i));
+    const titleToKey = new Map();
+
+    const addItemToMap = (i) => {
+      if (!i || !i.id) return;
+      const key = String(i.id);
+      const normTitle = (i.title || '').trim().toLowerCase();
+
+      let existingKey = key;
+      if (normTitle && titleToKey.has(normTitle)) {
+        existingKey = titleToKey.get(normTitle);
+      }
+
+      if (!map.has(existingKey)) {
+        map.set(existingKey, i);
+        if (normTitle) titleToKey.set(normTitle, existingKey);
+      } else {
+        const prev = map.get(existingKey);
+        if ((i.updatedAt || 0) >= (prev.updatedAt || 0)) {
+          if (!i.cover && prev.cover) i.cover = prev.cover;
+          map.set(existingKey, i);
+        }
+      }
+    };
+
+    localHistory.forEach(addItemToMap);
+    items.forEach(addItemToMap);
 
     const merged = Array.from(map.values());
     localStorage.setItem('loklok_watch_history', JSON.stringify(merged));
 
-    showToast(`Successfully imported ${data.count} titles from ${file.name}! 🎉`);
+    // Remove imported item IDs from deletedSet so they display immediately
+    const deletedSet = new Set(JSON.parse(localStorage.getItem('loklok_deleted_history') || '[]'));
+    items.forEach(i => {
+      if (i && i.id) deletedSet.delete(String(i.id));
+    });
+    localStorage.setItem('loklok_deleted_history', JSON.stringify(Array.from(deletedSet)));
+
+    showToast(`Successfully imported ${items.length} titles from ${file.name}! 🎉`);
     loadHistory(false);
 
   } catch (err) {
@@ -1710,24 +2779,202 @@ window.handleDbFileImport = async function(event) {
   }
 };
 
-window.exportHistoryJson = function() {
-  const localHistory = JSON.parse(localStorage.getItem('loklok_watch_history') || '[]');
-  if (localHistory.length === 0) {
-    showToast('No watch history items to export.');
+
+
+// --- Watch History Filtering, Sorting, and Search System ---
+state.historySortMode = state.historySortMode || 'latest';
+state.historySearchQuery = state.historySearchQuery || '';
+state.historyFilterType = state.historyFilterType || 'all';
+
+window.handleHistorySearch = function(query) {
+  state.historySearchQuery = (query || '').trim().toLowerCase();
+  const clearBtn = document.getElementById('history-search-clear');
+  if (clearBtn) clearBtn.style.display = state.historySearchQuery ? 'block' : 'none';
+  renderHistoryView();
+};
+
+window.clearHistorySearch = function() {
+  const input = document.getElementById('history-search-input');
+  if (input) input.value = '';
+  state.historySearchQuery = '';
+  const clearBtn = document.getElementById('history-search-clear');
+  if (clearBtn) clearBtn.style.display = 'none';
+  renderHistoryView();
+};
+
+window.setHistorySort = function(sortMode) {
+  state.historySortMode = sortMode;
+  renderHistoryView();
+};
+
+window.setHistoryFilter = function(filterType) {
+  state.historyFilterType = filterType;
+  const chips = document.querySelectorAll('#history-filter-chips .history-chip');
+  chips.forEach(c => c.classList.remove('active'));
+  const activeChip = document.getElementById(`hchip-${filterType === 'in-progress' ? 'watching' : filterType}`);
+  if (activeChip) activeChip.classList.add('active');
+  renderHistoryView();
+};
+
+window.renderHistoryView = function() {
+  const grid = document.getElementById('history-grid');
+  if (!grid) return;
+
+  const rawHistory = JSON.parse(localStorage.getItem('loklok_watch_history') || '[]');
+  const deletedSet = new Set(JSON.parse(localStorage.getItem('loklok_deleted_history') || '[]'));
+
+  let items = rawHistory.filter(it => it && it.id && !deletedSet.has(String(it.id)));
+
+  // 1. Text Search Filter
+  if (state.historySearchQuery) {
+    const q = state.historySearchQuery;
+    items = items.filter(it => {
+      const title = (it.title || '').toLowerCase();
+      const epName = (it.episodeName || '').toLowerCase();
+      return title.includes(q) || epName.includes(q);
+    });
+  }
+
+  // 2. Status Filter
+  if (state.historyFilterType === 'in-progress') {
+    items = items.filter(it => {
+      const pct = it.totalTime > 0 ? (it.progressTime / it.totalTime) * 100 : 0;
+      return pct > 0 && pct < 95;
+    });
+  } else if (state.historyFilterType === 'completed') {
+    items = items.filter(it => {
+      const pct = it.totalTime > 0 ? (it.progressTime / it.totalTime) * 100 : 0;
+      return pct >= 95;
+    });
+  }
+
+  // 3. Sorting Mode
+  items.sort((a, b) => {
+    switch (state.historySortMode) {
+      case 'oldest':
+        return (a.updatedAt || 0) - (b.updatedAt || 0);
+      case 'title-asc':
+        return (a.title || '').localeCompare(b.title || '');
+      case 'title-desc':
+        return (b.title || '').localeCompare(a.title || '');
+      case 'progress-desc': {
+        const pctA = a.totalTime > 0 ? (a.progressTime / a.totalTime) : 0;
+        const pctB = b.totalTime > 0 ? (b.progressTime / b.totalTime) : 0;
+        return pctB - pctA;
+      }
+      case 'progress-asc': {
+        const pctA = a.totalTime > 0 ? (a.progressTime / a.totalTime) : 0;
+        const pctB = b.totalTime > 0 ? (b.progressTime / b.totalTime) : 0;
+        return pctA - pctB;
+      }
+      case 'latest':
+      default:
+        return (b.updatedAt || 0) - (a.updatedAt || 0);
+    }
+  });
+
+  // Update Item Count Badge
+  const countBadge = document.getElementById('history-count-badge');
+  if (countBadge) {
+    countBadge.innerText = `${items.length} item${items.length === 1 ? '' : 's'}`;
+  }
+
+  if (items.length === 0) {
+    if (state.historySearchQuery) {
+      grid.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;padding:3rem;">
+          <p style="color:var(--text-muted);margin-bottom:1rem;font-size:1rem;">No history items match "<strong>${escapeHtml(state.historySearchQuery)}</strong>".</p>
+          <button class="btn btn-glass" onclick="clearHistorySearch()">Clear Search</button>
+        </div>
+      `;
+    } else {
+      grid.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;padding:3rem;">
+          <p style="color:var(--text-muted);margin-bottom:1rem;">No watch history recorded yet. Start watching any movie, drama, or anime to track your progress!</p>
+        </div>
+      `;
+    }
     return;
   }
 
-  const jsonStr = JSON.stringify({ version: '1.0', exportDate: new Date().toISOString(), count: localHistory.length, history: localHistory }, null, 2);
-  const blob = new Blob([jsonStr], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
+  const htmlContent = items.map(item => {
+    const progressPercent = item.totalTime > 0 ? Math.min(100, Math.round((item.progressTime / item.totalTime) * 100)) : 0;
+    const timeFormatted = item.progressTime > 0 ? formatSeconds(item.progressTime) : '';
+    const itemJson = JSON.stringify(item).replace(/"/g, '&quot;');
 
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `loklok_watch_history_backup_${Date.now()}.json`;
-  a.click();
+    const statusLabel = progressPercent >= 95 ? 'COMPLETED' : (progressPercent > 0 ? `WATCHED ${progressPercent}%` : 'STARTED WATCHING');
+    const epNameLabel = String(item.episodeName || 'EPISODE 1').toUpperCase();
 
-  URL.revokeObjectURL(url);
-  showToast(`Exported ${localHistory.length} history items to JSON! 📤`);
+    // Clean & unwrap nested cover URLs
+    let displayCover = item.cover || '';
+    if (typeof displayCover === 'string') {
+      while (displayCover.includes('/api/image?url=')) {
+        const match = displayCover.match(/[?&]url=([^&]+)/);
+        if (match) displayCover = decodeURIComponent(match[1]);
+        else break;
+      }
+      while (/^https?:\/\/img\.chhhn\.com\/https?:\/\//i.test(displayCover)) {
+        displayCover = displayCover.replace(/^https?:\/\/img\.chhhn\.com\//i, '');
+      }
+      if (displayCover.startsWith('data:') || displayCover.includes('No%20Cover') || displayCover.includes('pic.loklok.tv')) {
+        displayCover = '';
+      }
+    }
+    if (displayCover && !displayCover.startsWith('http') && !displayCover.startsWith('/')) {
+      displayCover = 'https://img.snssb.com/' + displayCover;
+    }
+    if (displayCover && !displayCover.startsWith('/api/image')) {
+      displayCover = `/api/image?url=${encodeURIComponent(displayCover)}`;
+    }
+
+    // Proactive on-the-fly cover auto-healer for cards with empty or placeholder covers
+    if (!displayCover && item.title) {
+      setTimeout(() => {
+        fetch(`/api/cover-lookup?title=${encodeURIComponent(item.title.trim())}`)
+          .then(r => r.json())
+          .then(d => {
+            if (d && d.success && d.covers && d.covers[item.title.trim()]) {
+              const freshCover = d.covers[item.title.trim()];
+              const imgEl = document.querySelector(`img[data-history-id="${item.id}"]`);
+              if (imgEl) {
+                imgEl.src = freshCover;
+                delete imgEl.dataset.failed;
+              }
+              item.cover = freshCover;
+              const hist = JSON.parse(localStorage.getItem('loklok_watch_history') || '[]');
+              const target = hist.find(h => String(h.id) === String(item.id) || (h.title && h.title.trim().toLowerCase() === item.title.trim().toLowerCase()));
+              if (target) {
+                target.cover = freshCover;
+                localStorage.setItem('loklok_watch_history', JSON.stringify(hist));
+              }
+            }
+          })
+          .catch(() => {});
+      }, 50);
+    }
+
+    return `
+      <div class="loklok-card" onclick="openDetailModal('${item.id}', '${item.category || 1}')">
+        <div class="card-poster-wrap">
+          <img class="card-poster-img" data-history-id="${item.id}" data-history-title="${escapeHtml(item.title)}" src="${displayCover || SVG_FALLBACK}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="handleImgError(this)">
+          <span class="badge-top-right">${progressPercent || 0}%</span>
+        </div>
+        <div class="card-info">
+          <div class="card-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
+          <div class="card-subtext-ep">${escapeHtml(epNameLabel)}</div>
+          <div class="card-subtext-status">${statusLabel}</div>
+          <div class="card-actions-row">
+            <button class="btn-resume-history" onclick="event.stopPropagation(); resumeWatchHistoryItem(${itemJson})">▶ RESUME</button>
+            <button class="btn-delete-history" title="Delete item" onclick="deleteHistoryItem(event, ${itemJson})">🗑️</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  if (grid.innerHTML !== htmlContent) {
+    grid.innerHTML = htmlContent;
+  }
 };
 
 window.loadHistory = async function(quiet = false) {
@@ -1760,68 +3007,112 @@ window.loadHistory = async function(quiet = false) {
     }
   }
 
-  // Merge server and local history by ID
+  // Merge server and local history by ID & Normalized Title
   const map = new Map();
-  serverHistory.forEach(item => {
-    if (!deletedSet.has(String(item.id))) {
-      map.set(String(item.id), item);
-    }
-  });
-  localHistory.forEach(item => {
+  const titleToKey = new Map();
+
+  const processItem = (item) => {
+    if (!item || !item.id || deletedSet.has(String(item.id))) return;
     const key = String(item.id);
-    if (!deletedSet.has(key)) {
-      if (!map.has(key) || (item.updatedAt || 0) > (map.get(key).updatedAt || 0)) {
-        map.set(key, item);
+    const normTitle = (item.title || '').trim().toLowerCase();
+
+    // Check if we already have this title under another key
+    let existingKey = key;
+    if (normTitle && titleToKey.has(normTitle)) {
+      existingKey = titleToKey.get(normTitle);
+    }
+
+    if (!map.has(existingKey)) {
+      map.set(existingKey, item);
+      if (normTitle) titleToKey.set(normTitle, existingKey);
+    } else {
+      const prev = map.get(existingKey);
+      if ((item.updatedAt || 0) >= (prev.updatedAt || 0)) {
+        if (!item.cover && prev.cover) item.cover = prev.cover;
+        map.set(existingKey, item);
       }
     }
-  });
+  };
+
+  serverHistory.forEach(processItem);
+  localHistory.forEach(processItem);
 
   const combined = Array.from(map.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  localStorage.setItem('loklok_watch_history', JSON.stringify(combined));
+
+  // Automatically link & upload pre-login local history to cloud account upon login
+  if (state.token && localHistory.length > 0) {
+    const serverIdSet = new Set(serverHistory.map(s => String(s.id)));
+    const serverTitleSet = new Set(serverHistory.map(s => (s.title || '').trim().toLowerCase()));
+
+    localHistory.forEach(locItem => {
+      if (!locItem || !locItem.id) return;
+      const normTitle = (locItem.title || '').trim().toLowerCase();
+      if (!serverIdSet.has(String(locItem.id)) && (!normTitle || !serverTitleSet.has(normTitle))) {
+        fetch('/api/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'token': state.token },
+          body: JSON.stringify({
+            action: 'save',
+            id: String(locItem.id),
+            category: String(locItem.category || 1),
+            title: locItem.title,
+            cover: locItem.cover || '',
+            episodeId: String(locItem.episodeId || ''),
+            episodeName: locItem.episodeName || 'Episode 1',
+            progressTime: locItem.progressTime || 0,
+            totalTime: locItem.totalTime || 0
+          })
+        }).catch(() => {});
+      }
+    });
+  }
+
   console.log(`📊 Quiet Sync History (${combined.length} total items):`, combined);
   console.groupEnd();
 
-  if (!grid) return;
+  // Render view through our filter/sort system
+  renderHistoryView();
 
-  if (combined.length === 0) {
-    grid.innerHTML = `
-      <div style="grid-column:1/-1;text-align:center;padding:3rem;">
-        <p style="color:var(--text-muted);margin-bottom:1rem;">No watch history recorded yet. Start watching any movie, drama, or anime to track your progress!</p>
-      </div>
-    `;
-    return;
-  }
+  // Automatic Background Cover Auto-Healer for Watch History
+  const titlesNeedingCovers = combined
+    .filter(it => !it.cover || it.cover.startsWith('data:') || it.cover.includes('No%20Cover') || it.cover.includes('pic.loklok.tv') || it.cover.includes('https%3A%2F%2Fimg.chhhn.com%2Fhttps'))
+    .map(it => (it.title || '').trim())
+    .filter(t => t.length > 0);
 
-  const htmlContent = combined.map(item => {
-    const progressPercent = item.totalTime > 0 ? Math.min(100, Math.round((item.progressTime / item.totalTime) * 100)) : 0;
-    const timeFormatted = item.progressTime > 0 ? formatSeconds(item.progressTime) : '';
-    const label = progressPercent > 0 ? `Already watched ${progressPercent}% ${timeFormatted ? '(' + timeFormatted + ')' : ''}` : 'Started watching';
-    const itemJson = JSON.stringify(item).replace(/"/g, '&quot;');
-
-    return `
-      <div class="loklok-card" onclick="openDetailModal('${item.id}', '${item.category || 1}')">
-        <div class="card-poster-wrap">
-          <img class="card-poster-img" src="${item.cover}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="handleImgError(this)">
-          <span class="badge-top-right" style="background:rgba(0,0,0,0.8);">${progressPercent || 0}%</span>
-        </div>
-        <div class="card-details">
-          <div class="card-name">${escapeHtml(item.title)}</div>
-          <div class="card-subtext" style="color:var(--accent-purple);font-weight:600;">${escapeHtml(item.episodeName || 'Episode')}</div>
-          <div class="card-subtext">${label}</div>
-          <div class="progress-bar-bg" style="margin-top:0.4rem;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;">
-            <div style="width:${progressPercent}%;height:100%;background:linear-gradient(90deg, #9333ea, #c084fc);"></div>
-          </div>
-          <div style="display:flex;gap:0.4rem;margin-top:0.6rem;">
-            <button class="btn btn-primary" style="flex:1;padding:0.45rem;font-size:0.8rem;justify-content:center;" onclick="event.stopPropagation(); resumeWatchHistoryItem(${itemJson})">▶ Resume</button>
-            <button class="btn-appointment" style="background:rgba(239,68,68,0.2);color:#f87171;padding:0.45rem 0.65rem;" title="Delete item" onclick="deleteHistoryItem(event, ${itemJson})">🗑️</button>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  // Update DOM quietly without wiping if content is identical
-  if (grid.innerHTML !== htmlContent) {
-    grid.innerHTML = htmlContent;
+  if (titlesNeedingCovers.length > 0) {
+    fetch('/api/cover-lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ titles: titlesNeedingCovers })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.success && data.covers) {
+        let hasUpdates = false;
+        for (const [title, resolvedCover] of Object.entries(data.covers)) {
+          if (!resolvedCover) continue;
+          const escapedTitle = title.replace(/"/g, '\\"');
+          const imgs = document.querySelectorAll(`img[data-history-title="${escapedTitle}"]`);
+          imgs.forEach(img => {
+            img.src = resolvedCover;
+            delete img.dataset.failed;
+          });
+          const matchItem = combined.find(it => (it.title || '').trim().toLowerCase() === title.toLowerCase());
+          if (matchItem) {
+            matchItem.cover = resolvedCover;
+            hasUpdates = true;
+          }
+        }
+        if (hasUpdates) {
+          localStorage.setItem('loklok_watch_history', JSON.stringify(combined));
+          if (typeof renderHistoryView === 'function') {
+            renderHistoryView();
+          }
+        }
+      }
+    })
+    .catch(() => {});
   }
 };
 
@@ -1863,12 +3154,43 @@ window.showToast = function(msg) {
 };
 
 window.handleImgError = function(img) {
-  if (!img.dataset.proxied) {
-    img.dataset.proxied = "true";
-    img.src = "/api/image?url=" + encodeURIComponent(img.src);
-  } else {
-    img.src = SVG_FALLBACK;
+  if (!img || img.dataset.failed === 'true') return;
+  const currentSrc = img.src || '';
+
+  // Mark immediately as failed to prevent any infinite loops
+  img.dataset.failed = 'true';
+
+  // On-demand cover recovery using title attribute if image fails
+  const itemTitle = img.getAttribute('data-history-title') || img.getAttribute('alt') || '';
+  if (itemTitle && !img.dataset.lookedUp) {
+    img.dataset.lookedUp = 'true';
+    fetch(`/api/cover-lookup?title=${encodeURIComponent(itemTitle.trim())}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.success && data.covers && data.covers[itemTitle.trim()]) {
+          const freshCover = data.covers[itemTitle.trim()];
+          img.src = freshCover;
+          delete img.dataset.failed;
+          // Update localStorage history if applicable
+          try {
+            const hist = JSON.parse(localStorage.getItem('loklok_watch_history') || '[]');
+            const target = hist.find(h => (h.title || '').trim().toLowerCase() === itemTitle.trim().toLowerCase());
+            if (target) {
+              target.cover = freshCover;
+              localStorage.setItem('loklok_watch_history', JSON.stringify(hist));
+            }
+          } catch (_) {}
+          return;
+        }
+        img.src = SVG_FALLBACK;
+      })
+      .catch(() => {
+        img.src = SVG_FALLBACK;
+      });
+    return;
   }
+
+  img.src = SVG_FALLBACK;
 };
 
 
@@ -2012,6 +3334,9 @@ function initUserUI() {
           </a>
           <a onclick="switchNav('watchlist')" style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 1rem; color:#fff; text-decoration:none; font-size:0.85rem; cursor:pointer;" onmouseover="this.style.background='rgba(0,255,255,0.1)'" onmouseout="this.style.background='transparent'">
             ⭐ My Watchlist
+          </a>
+          <a onclick="openAccountSettingsModal()" style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 1rem; color:#fff; text-decoration:none; font-size:0.85rem; cursor:pointer;" onmouseover="this.style.background='rgba(0,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+            ⚙️ Account Settings
           </a>
           <div style="border-top:1px solid rgba(255,255,255,0.08); margin-top:0.25rem; padding-top:0.25rem;">
             <a onclick="handleLogout()" style="display:flex; align-items:center; gap:0.6rem; padding:0.65rem 1rem; color:#ef4444; text-decoration:none; font-size:0.85rem; font-weight:600; cursor:pointer;" onmouseover="this.style.background='rgba(239,68,68,0.1)'" onmouseout="this.style.background='transparent'">
@@ -2213,51 +3538,16 @@ document.addEventListener('click', () => {
   if (menu) menu.style.display = 'none';
 });
 
-// Internal State & Fallbacks
-const SVG_FALLBACK = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450"><rect width="100%" height="100%" fill="%2312161f"/><text x="50%" y="50%" fill="%2364748b" font-size="16" text-anchor="middle">No Cover</text></svg>`;
-
-const initialToken = localStorage.getItem('loklok_token') || '';
-const cleanInitialToken = (initialToken === '1' || initialToken === 'undefined' || initialToken === 'null' || initialToken.length < 8) ? '' : initialToken;
-
-const state = {
-  activeNav: 'home',
-  activeProfileTab: 'history',
-  token: cleanInitialToken,
-  user: JSON.parse(localStorage.getItem('loklok_user') || 'null'),
-  language: localStorage.getItem('loklok_lang') || 'en',
-  artPlayer: null,
-  currentMedia: null,
-  currentEpisode: null,
-  progressInterval: null,
-  qrCode: null,
-  qrTimer: null,
-  settings: {
-    autoboot: localStorage.getItem('loklok_autoboot') === 'true',
-    blockPorno: localStorage.getItem('loklok_blockPorno') === 'true',
-    blockLgbt: localStorage.getItem('loklok_blockLgbt') === 'true',
-    allowAdult: localStorage.getItem('loklok_allowAdult') === 'true',
-    sourceLoklok: localStorage.getItem('loklok_sourceLoklok') !== 'false',
-    sourceNarto: localStorage.getItem('loklok_sourceNarto') !== 'false',
-    sourceHollywood: localStorage.getItem('loklok_sourceHollywood') !== 'false',
-    sourceViva: localStorage.getItem('loklok_sourceViva') !== 'false',
-    sourceAnime: localStorage.getItem('loklok_sourceAnime') !== 'false',
-    sourceClassics: false
-  },
-  filters: {
-    params: '',
-    area: '',
-    category: '',
-    order: 'count',
-    sourceFilter: ''
-  }
-};
-
-if (!cleanInitialToken) {
+if (!appInitialToken) {
   localStorage.removeItem('loklok_token');
 }
 
 window.switchNav = function(viewName, pushUrl = true) {
   state.activeNav = viewName;
+
+  if (state.token && viewName !== 'history') {
+    try { loadHistory(true); } catch (_) {}
+  }
 
   // Close search dropdown on any navigation
   const dropdown = document.getElementById('search-suggestions-dropdown');
@@ -2313,6 +3603,13 @@ window.switchNav = function(viewName, pushUrl = true) {
     loadWatchlist();
   }
 };
+
+// Automatic Background Cloud Sync for Authenticated Accounts (every 15s)
+setInterval(() => {
+  if (state.token && typeof loadHistory === 'function') {
+    try { loadHistory(true); } catch (_) {}
+  }
+}, 15000);
 
 window.loadWeeklyCalendar = async function() {
   const tabsContainer = document.getElementById('calendar-day-tabs');
@@ -2636,12 +3933,17 @@ window.filterWatchlistByFolder = function(folderKey, btnEl) {
 
 window.toggleVolBoostDropdown = function(e) {
   if (e) e.stopPropagation();
-  const dropdown = document.getElementById('vol-boost-dropdown');
-  const subPopover = document.getElementById('player-sub-popover');
-  if (subPopover) subPopover.style.display = 'none';
+  const boostBar = document.getElementById('player-landscape-boost-bar') || document.getElementById('vol-boost-dropdown');
+  const qualBar = document.getElementById('player-landscape-quality-bar');
+  const drawer = document.getElementById('player-episodes-drawer');
+  const subModal = document.getElementById('player-sub-modal') || document.getElementById('player-sub-popover');
+  if (qualBar) qualBar.style.display = 'none';
+  if (drawer) drawer.style.display = 'none';
+  if (subModal) subModal.style.display = 'none';
 
-  if (dropdown) {
-    dropdown.style.display = (dropdown.style.display === 'none' || !dropdown.style.display) ? 'block' : 'none';
+  if (boostBar) {
+    const isHidden = window.getComputedStyle(boostBar).display === 'none' || boostBar.style.display === 'none';
+    boostBar.style.display = isHidden ? 'block' : 'none';
   }
 };
 
@@ -2791,6 +4093,12 @@ function initSettingsUI() {
   const toggleAnime = document.getElementById('setting-source-anime');
   const toggleClassics = document.getElementById('setting-source-classics');
 
+  const isDedupDisabled = localStorage.getItem('wox_disable_dedup') === 'true';
+  const toggleDedupSearch = document.getElementById('search-dedup-toggle');
+  const toggleDedupSettings = document.getElementById('setting-disable-dedup');
+  if (toggleDedupSearch) toggleDedupSearch.checked = isDedupDisabled;
+  if (toggleDedupSettings) toggleDedupSettings.checked = isDedupDisabled;
+
   if (toggleAdult) toggleAdult.checked = state.settings.allowAdult;
   if (toggleLgbt) toggleLgbt.checked = state.settings.blockLgbt;
   if (togglePorno) togglePorno.checked = state.settings.blockPorno;
@@ -2806,6 +4114,20 @@ function initSettingsUI() {
   if (langSelect) langSelect.value = state.language;
   if (cacheText) cacheText.innerText = calculateCacheSize();
 }
+
+function toggleDeduplicationSetting(isDisabled) {
+  localStorage.setItem('wox_disable_dedup', isDisabled ? 'true' : 'false');
+  const toggleDedupSearch = document.getElementById('search-dedup-toggle');
+  const toggleDedupSettings = document.getElementById('setting-disable-dedup');
+  if (toggleDedupSearch) toggleDedupSearch.checked = isDisabled;
+  if (toggleDedupSettings) toggleDedupSettings.checked = isDisabled;
+
+  const searchView = document.getElementById('view-search');
+  if (searchView && searchView.style.display !== 'none') {
+    executeKeywordSearch();
+  }
+}
+window.toggleDeduplicationSetting = toggleDeduplicationSetting;
 
 const FILTER_SCHEMAS = {
   default: {
@@ -2966,11 +4288,40 @@ async function executeKeywordSearch(query) {
 
   grid.innerHTML = '<div class="spinner"></div>';
 
+  console.group(`%c🔍 [Search Multi-Source Debug] Query: "${searchQuery}"`, 'color: #38bdf8; font-weight: bold; font-size: 1.15rem;');
+  console.log('⏱️ Timestamp:', new Date().toLocaleTimeString());
+  console.log('🔑 Auth Token:', state.token ? `${state.token.substring(0, 16)}...` : 'Guest');
+
   try {
-    const res = await fetch(`/api/search?keyword=${encodeURIComponent(searchQuery)}&token=${encodeURIComponent(state.token || '')}&allowAdult=${String(state.settings.allowAdult || false)}`);
+    const isDedupDisabled = localStorage.getItem('wox_disable_dedup') === 'true';
+    const res = await fetch(`/api/search?keyword=${encodeURIComponent(searchQuery)}&token=${encodeURIComponent(state.token || '')}&allowAdult=${String(state.settings.allowAdult || false)}&disable_dedup=${isDedupDisabled ? 'true' : 'false'}&dedup=${isDedupDisabled ? 'false' : 'true'}`);
     const data = await res.json();
     const rawResults = data.results || [];
     const filtered = filterContentBySettings(rawResults);
+    const counts = data.sourceCounts || {};
+
+    console.log('%c📊 Source Breakdown Counts:', 'color: #a855f7; font-weight: bold;');
+    console.table({
+      'Loklok HD': { count: counts.loklok || 0 },
+      'Hollywood (TMDB)': { count: counts.hollywood || 0 },
+      'Narto Short Drama': { count: counts.narto || 0 },
+      'Anime HD': { count: counts.anime || 0 },
+      'Asian Drama': { count: counts.drama || 0 },
+      'Classics': { count: counts.classics || 0 },
+      'Adult (18+)': { count: counts.adult || 0 },
+      'Total Combined': { count: rawResults.length }
+    });
+
+    if (data.debugInfo) {
+      console.log('%c🛠️ Server Diagnostic Info:', 'color: #eab308; font-weight: bold;', data.debugInfo);
+      if (data.debugInfo.hollywoodError) console.warn('⚠️ Hollywood Error:', data.debugInfo.hollywoodError);
+      if (data.debugInfo.nartoError) console.warn('⚠️ Narto Error:', data.debugInfo.nartoError);
+      if (data.debugInfo.animeError) console.warn('⚠️ Anime Error:', data.debugInfo.animeError);
+      if (data.debugInfo.dramaError) console.warn('⚠️ Drama Error:', data.debugInfo.dramaError);
+    }
+
+    console.log(`✅ Filtered and Displayed: ${filtered.length} titles`);
+    console.groupEnd();
 
     if (filtered.length === 0) {
       grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;text-align:center;padding:3rem;">No media titles found for this search term.</p>';
@@ -2978,6 +4329,8 @@ async function executeKeywordSearch(query) {
       grid.innerHTML = filtered.map(item => renderLoklokCard(item)).join('');
     }
   } catch (err) {
+    console.error('❌ Search execution failed:', err);
+    console.groupEnd();
     grid.innerHTML = `<p style="color:var(--text-muted);grid-column:1/-1;text-align:center;padding:3rem;">Error loading search results: ${err.message}</p>`;
   }
 }
@@ -3007,6 +4360,7 @@ async function executeCategorySearch(isReset = true) {
   }
 
   try {
+    const isDedupDisabled = localStorage.getItem('wox_disable_dedup') === 'true';
     const queryParams = new URLSearchParams({
       params: state.filters.params || 'MOVIE,TV,VARIETY,COMIC,DOCUMENTARY,MINISERIES',
       area: state.filters.area || '',
@@ -3016,7 +4370,8 @@ async function executeCategorySearch(isReset = true) {
       source: state.filters.sourceFilter || '',
       page: state.filters.page || 0,
       token: state.token || '',
-      allowAdult: String(state.settings.allowAdult || false)
+      allowAdult: String(state.settings.allowAdult || false),
+      dedup: isDedupDisabled ? 'false' : 'true'
     });
 
     const res = await fetch(`/api/search?${queryParams.toString()}`);
@@ -3050,19 +4405,14 @@ async function executeCategorySearch(isReset = true) {
 
     if (spEl) spEl.style.display = 'none';
 
-    // Auto-fetch next page if deduplication/filtering yielded 0 new items on an infinite scroll page load (max 2 retries)
-    if (!isReset && filtered.length === 0 && state.filters.hasMore) {
-      state.filters.emptyRetries = (state.filters.emptyRetries || 0) + 1;
-      if (state.filters.emptyRetries < 2) {
-        setTimeout(() => { executeCategorySearch(false); }, 150);
-        return;
-      } else {
-        state.filters.hasMore = false;
-        if (txtEl) txtEl.innerText = 'END OF RESULTS';
-        return;
-      }
+    // Auto-fill grid if total visible cards is low (< 16) and server has more pages available
+    const totalVisibleCards = grid.querySelectorAll('.loklok-card').length;
+    if (totalVisibleCards < 16 && state.filters.hasMore && (state.filters.autoFetchCount || 0) < 4) {
+      state.filters.autoFetchCount = (state.filters.autoFetchCount || 0) + 1;
+      setTimeout(() => { executeCategorySearch(false); }, 100);
+      return;
     }
-    state.filters.emptyRetries = 0;
+    state.filters.autoFetchCount = 0;
 
     if (!state.filters.hasMore) {
       if (txtEl) txtEl.innerText = 'END OF RESULTS';
@@ -3132,8 +4482,79 @@ window.selectHeroItem = function(item, thumbEl) {
   }
 };
 
-async function loadHomeFeed() {
+let _clientHomeFeedCache = null;
+let _clientHomeFeedTime = 0;
+
+function renderHomeFeedData(data) {
   const container = document.getElementById('home-shelves');
+  if (!container || !data || !data.sections) return;
+
+  const allItems = [];
+  data.sections.forEach(sec => allItems.push(...(sec.items || [])));
+  
+  if (allItems.length > 0) {
+    const heroThumbnails = document.getElementById('hero-thumbnails');
+    const featuredList = filterContentBySettings(allItems).slice(0, 8);
+    
+    if (featuredList.length > 0 && heroThumbnails) {
+      heroThumbnails.innerHTML = featuredList.map((item, idx) => `
+        <img class="hero-thumb ${idx === 0 ? 'active' : ''}" src="${item.cover}" alt="${escapeHtml(item.title)}" onclick='selectHeroItem(${JSON.stringify(item).replace(/'/g, "&#39;")}, this)' onerror="handleImgError(this)">
+      `).join('');
+
+      selectHeroItem(featuredList[0], heroThumbnails.children[0]);
+    }
+  }
+
+  const localHistory = JSON.parse(localStorage.getItem('loklok_watch_history') || '[]');
+  let continueBarHtml = '';
+  if (localHistory.length > 0) {
+    const topHistory = localHistory[0];
+    const pct = topHistory.totalTime ? Math.round((topHistory.progressTime / topHistory.totalTime) * 100) : 0;
+    continueBarHtml = `
+      <div style="margin: 0 2rem 1.5rem 2rem; background: linear-gradient(90deg, rgba(147, 51, 234, 0.25) 0%, rgba(56, 189, 248, 0.15) 100%); border: 1px solid var(--border-neon); border-radius: 16px; padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; box-shadow: 0 10px 25px rgba(147,51,234,0.15);">
+        <div style="display: flex; align-items: center; gap: 1rem; flex: 1; min-width: 0;">
+          <img src="${topHistory.cover}" style="width: 44px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-glass);" onerror="handleImgError(this)">
+          <div style="min-width: 0;">
+            <div style="font-size: 0.8rem; font-weight: 700; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.5px;">▶ Continue Watching</div>
+            <div style="font-size: 1.05rem; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(topHistory.title)}</div>
+            <div style="font-size: 0.82rem; color: var(--text-muted);">${escapeHtml(topHistory.episodeName || 'Episode')} • ${pct}% Completed</div>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="openDetailModal('${topHistory.id}', '${topHistory.category || 1}')" style="padding: 0.55rem 1.25rem; font-size: 0.85rem;">
+          Resume Play ▶
+        </button>
+      </div>
+    `;
+  }
+
+  container.innerHTML = continueBarHtml + data.sections.map(section => {
+    const filteredItems = filterContentBySettings(section.items);
+    if (filteredItems.length === 0) return '';
+
+    return `
+      <div class="shelf-container">
+        <div class="shelf-header">
+          <h2 class="shelf-title">${escapeHtml(section.title)} <span style="font-size:1rem;color:var(--text-dim);">&gt;</span></h2>
+          <button class="shelf-switch-btn" onclick="loadHomeFeed(true)">Switch 🔄</button>
+        </div>
+        <div class="card-grid">
+          ${filteredItems.map((item, idx) => renderLoklokCard(item, idx < 6)).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function loadHomeFeed(forceRefresh = false) {
+  const container = document.getElementById('home-shelves');
+  if (!container) return;
+
+  // Instant render from Client-Side Memory Cache (< 3 min TTL)
+  if (!forceRefresh && _clientHomeFeedCache && (Date.now() - _clientHomeFeedTime < 180000)) {
+    renderHomeFeedData(_clientHomeFeedCache);
+    return;
+  }
+
   container.innerHTML = '<div class="spinner"></div>';
 
   try {
@@ -3145,61 +4566,9 @@ async function loadHomeFeed() {
       return;
     }
 
-    const allItems = [];
-    data.sections.forEach(sec => allItems.push(...sec.items));
-    
-    if (allItems.length > 0) {
-      const heroThumbnails = document.getElementById('hero-thumbnails');
-      const featuredList = filterContentBySettings(allItems).slice(0, 8);
-      
-      if (featuredList.length > 0 && heroThumbnails) {
-        heroThumbnails.innerHTML = featuredList.map((item, idx) => `
-          <img class="hero-thumb ${idx === 0 ? 'active' : ''}" src="${item.cover}" alt="${escapeHtml(item.title)}" onclick='selectHeroItem(${JSON.stringify(item).replace(/'/g, "&#39;")}, this)' onerror="handleImgError(this)">
-        `).join('');
-
-        selectHeroItem(featuredList[0], heroThumbnails.children[0]);
-      }
-    }
-
-    const localHistory = JSON.parse(localStorage.getItem('loklok_watch_history') || '[]');
-    let continueBarHtml = '';
-    if (localHistory.length > 0) {
-      const topHistory = localHistory[0];
-      const pct = topHistory.totalTime ? Math.round((topHistory.progressTime / topHistory.totalTime) * 100) : 0;
-      continueBarHtml = `
-        <div style="margin: 0 2rem 1.5rem 2rem; background: linear-gradient(90deg, rgba(147, 51, 234, 0.25) 0%, rgba(56, 189, 248, 0.15) 100%); border: 1px solid var(--border-neon); border-radius: 16px; padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; box-shadow: 0 10px 25px rgba(147,51,234,0.15);">
-          <div style="display: flex; align-items: center; gap: 1rem; flex: 1; min-width: 0;">
-            <img src="${topHistory.cover}" style="width: 44px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-glass);" onerror="handleImgError(this)">
-            <div style="min-width: 0;">
-              <div style="font-size: 0.8rem; font-weight: 700; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.5px;">▶ Continue Watching</div>
-              <div style="font-size: 1.05rem; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(topHistory.title)}</div>
-              <div style="font-size: 0.82rem; color: var(--text-muted);">${escapeHtml(topHistory.episodeName || 'Episode')} • ${pct}% Completed</div>
-            </div>
-          </div>
-          <button class="btn btn-primary" onclick="openDetailModal('${topHistory.id}', '${topHistory.category || 1}')" style="padding: 0.55rem 1.25rem; font-size: 0.85rem;">
-            Resume Play ▶
-          </button>
-        </div>
-      `;
-    }
-
-    container.innerHTML = continueBarHtml + data.sections.map(section => {
-      const filteredItems = filterContentBySettings(section.items);
-      if (filteredItems.length === 0) return '';
-
-      return `
-        <div class="shelf-container">
-          <div class="shelf-header">
-            <h2 class="shelf-title">${escapeHtml(section.title)} <span style="font-size:1rem;color:var(--text-dim);">&gt;</span></h2>
-            <button class="shelf-switch-btn" onclick="loadHomeFeed()">Switch 🔄</button>
-          </div>
-          <div class="card-grid">
-            ${filteredItems.map((item, idx) => renderLoklokCard(item, idx < 6)).join('')}
-          </div>
-        </div>
-      `;
-    }).join('');
-
+    _clientHomeFeedCache = data;
+    _clientHomeFeedTime = Date.now();
+    renderHomeFeedData(data);
   } catch (err) {
     container.innerHTML = `<p style="text-align:center;color:var(--text-muted);padding:3rem;">Error loading home: ${err.message}</p>`;
   }
@@ -3209,32 +4578,73 @@ function deduplicateClientMediaList(items) {
   if (!Array.isArray(items)) return [];
   const map = new Map();
   const seenIds = new Set();
+  const seasonKeysSet = new Set();
 
-  for (const item of items) {
-    if (!item || !item.title || !item.id) continue;
-    if (seenIds.has(item.id)) continue;
+  const cleanedItems = items.filter(item => {
+    if (!item || !item.title || !item.id) return false;
+    if (seenIds.has(item.id)) return false;
     seenIds.add(item.id);
-
-    const normKey = String(item.title)
+    item.cleanTitle = String(item.title)
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .replace(/[’‘`´]/g, "'")
       .replace(/[（【]/g, '(')
       .replace(/[）】]/g, ')')
       .replace(/^\[(?:narto|loklok|hollywood|classics|anime|adult)\]\s*/gi, '')
-      .replace(/\s*\([^)]*(?:india|korea|japan|philippines|china|indonesia|thailand|vietnam|us|uk|dub|sub|uncensored|hd|4k|1080p|720p|english|bahasa)[^)]*\)/gi, '')
-      .replace(/\s*[-:\s]\s*season\s*\d+/gi, '')
-      .replace(/\s*\bseason\s*\d+\b/gi, '')
-      .replace(/\s*\bseries\s*\d+\b/gi, '')
-      .replace(/\s*\bs\d{1,2}\b/gi, '')
-      .replace(/\s*[-:\s]\s*full\s*episodes?\b/gi, '')
-      .replace(/\s*[-:\s]\s*\d+\s*$/gi, '')
-      .replace(/\s*\b\d{4}\b/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '');
+      .replace(/\s*\[(?:english|hindi|indonesian|tagalog|portuguese|spanish|french|german|japanese|korean|chinese|dubbed|subbed|dub|sub|uncensored|hd|4k|1080p|720p|bahasa)\]/gi, '')
+      .replace(/\s*\([^)]*(?:india|korea|japan|philippines|china|indonesia|thailand|vietnam|us|uk|dubbed|subbed|dub|sub|uncensored|hd|4k|1080p|720p|english|hindi|indonesian|tagalog|portuguese|spanish|french|german|bahasa)[^)]*\)/gi, '')
+      .replace(/\s*\b(?:tagalog|english|hindi|indonesian|portuguese|spanish|french|german|dubbed|subbed)\b$/gi, '')
+      .trim();
+    return true;
+  });
 
-    if (!normKey) continue;
+  cleanedItems.forEach(item => {
+    const isSeasoned = /\bseason\s*\d+|\bs\d{1,2}|\bpart\.?\s*\d+/i.test(item.cleanTitle);
+    if (isSeasoned) {
+      const baseName = item.cleanTitle
+        .replace(/\s*[-:]?\s*season\s*\d+/gi, '')
+        .replace(/\s*\bseason\s*\d+\b/gi, '')
+        .replace(/\s*\bs\d{1,2}\b/gi, '')
+        .replace(/\s*[-:]?\s*part\.?\s*\d+/gi, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+      if (baseName) seasonKeysSet.add(baseName);
+    }
+  });
 
-    if (!map.has(normKey)) {
-      map.set(normKey, item);
+  for (const item of cleanedItems) {
+    const domain = String(item.domainType || item.category || '1').toUpperCase();
+    const rawNorm = item.cleanTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const isBareParent = seasonKeysSet.has(rawNorm) && !/\bseason\s*\d+|\bs\d{1,2}|\bpart/i.test(item.cleanTitle);
+
+    let targetKey = `${rawNorm}_${domain}`;
+    if (isBareParent) {
+      targetKey = `${rawNorm}season1_${domain}`;
+    }
+
+    if (!map.has(targetKey)) {
+      map.set(targetKey, { ...item, title: item.cleanTitle });
+    } else {
+      const existing = map.get(targetKey);
+      if (!existing.mirrors) {
+        existing.mirrors = [
+          { id: existing.id, sourceKey: existing.sourceKey || 'loklok', sourceName: existing.sourceName || 'Main Server' }
+        ];
+      }
+      const currentMirror = {
+        id: item.id,
+        sourceKey: item.sourceKey || (item.isNarto ? 'narto' : 'loklok'),
+        sourceName: item.sourceName || 'Alternative Mirror',
+        category: item.category
+      };
+      if (!existing.mirrors.some(m => m.id === item.id)) {
+        existing.mirrors.push(currentMirror);
+      }
+      if ((!existing.cover || existing.cover.includes('placeholder') || existing.cover.includes('snssb')) && item.cover && item.cover.includes('tmdb')) {
+        existing.cover = item.cover;
+      }
+      if (!existing.score && item.score) {
+        existing.score = item.score;
+      }
     }
   }
 
@@ -3247,7 +4657,6 @@ function filterContentBySettings(items) {
     if (!item) return false;
     const title = (item.title || '').toLowerCase();
     const srcKey = String(item.sourceKey || '').toLowerCase();
-    const isLoklok = !item.isNarto && (srcKey === 'loklok' || item.sourceName === 'Loklok HD');
 
     if (state.settings.blockLgbt && (title.includes('lgbt') || title.includes('queer') || title.includes('gay') || title.includes('lesbian'))) {
       return false;
@@ -3256,34 +4665,64 @@ function filterContentBySettings(items) {
       return false;
     }
 
-    if (state.settings.sourceLoklok === false && isLoklok) return false;
+    if (state.settings.sourceLoklok === false && (!srcKey || srcKey === 'loklok')) return false;
     if (state.settings.sourceNarto === false && (item.isNarto || srcKey === 'narto')) return false;
     if (state.settings.sourceHollywood === false && (srcKey === 'hollywood' || srcKey === 'flixhq')) return false;
-    if (state.settings.sourceAnime === false && (srcKey === 'anime' || srcKey === 'drama')) return false;
-    if (state.settings.sourceClassics !== true && (srcKey === 'classics' || item.sourceName === 'Classics Archive' || item.sourceName === 'Classics')) return false;
 
     return true;
   });
   return deduplicateClientMediaList(filtered);
 }
 
+function getSourceBadge(item) {
+  if (!item) return { name: 'Loklok HD', icon: '⚡', bg: 'linear-gradient(135deg, #ec4899, #8b5cf6)', color: '#ffffff' };
+  
+  let key = (item.sourceKey || '').toLowerCase();
+  let name = item.sourceName || '';
+
+  if (!key && item.id) {
+    const idStr = String(item.id);
+    if (idStr.startsWith('wox_l_')) key = 'loklok';
+    else if (idStr.startsWith('m_') || idStr.startsWith('t_') || idStr.startsWith('hw_') || idStr.startsWith('hollywood_')) key = 'hollywood';
+    else if (idStr.startsWith('narto_')) key = 'narto';
+    else if (idStr.startsWith('anime_') || idStr.startsWith('al_')) key = 'anime';
+    else if (idStr.startsWith('drama_') || idStr.startsWith('asian-drama')) key = 'drama';
+    else if (idStr.startsWith('classics_')) key = 'classics';
+    else if (idStr.startsWith('adult_') || idStr.startsWith('hstream_') || idStr.startsWith('hentaimama_')) key = 'adult';
+  }
+
+  const BADGE_STYLES = {
+    'loklok': { name: 'Loklok HD', icon: '⚡', bg: 'linear-gradient(135deg, #ec4899, #8b5cf6)', color: '#ffffff' },
+    'hollywood': { name: 'Hollywood', icon: '🎬', bg: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#ffffff' },
+    'narto': { name: 'Narto Reel', icon: '📱', bg: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#ffffff' },
+    'anime': { name: 'Anime', icon: '🌸', bg: 'linear-gradient(135deg, #10b981, #059669)', color: '#ffffff' },
+    'drama': { name: 'Asian Drama', icon: '🐉', bg: 'linear-gradient(135deg, #8b5cf6, #6d28d9)', color: '#ffffff' },
+    'classics': { name: 'Classics', icon: '🏛️', bg: 'linear-gradient(135deg, #64748b, #475569)', color: '#ffffff' },
+    'adult': { name: '18+ Adult', icon: '🔥', bg: 'linear-gradient(135deg, #ef4444, #991b1b)', color: '#ffffff' }
+  };
+
+  return BADGE_STYLES[key] || { name: name || 'HD Stream', icon: '🎥', bg: 'linear-gradient(135deg, #6366f1, #4338ca)', color: '#ffffff' };
+}
+
 function renderWoxCard(item, isHighPriority = false) {
   if (!item || !item.id) return '';
   const cleanTitle = String(item.title || '').replace(/^\[narto\]\s*/i, '').trim();
   const itemJson = JSON.stringify({ id: item.id, category: item.category || 1, title: cleanTitle, cover: item.cover, score: item.score || '8.5' }).replace(/"/g, '&quot;');
+  const sBadge = getSourceBadge(item);
   
   let domainLabel = 'HD';
   if (item.domainType === 0 || item.domainType === '0') domainLabel = 'MOVIE';
   else if (item.domainType === 1 || item.domainType === '1') domainLabel = 'TV';
   else if (typeof item.domainType === 'string' && item.domainType.length > 1) domainLabel = item.domainType;
 
-  const yearText = item.year || item.area || domainLabel;
+  const yearText = item.releaseDate || item.year || item.area || domainLabel;
 
   return `
     <div class="loklok-card" onclick="openDetailModal('${item.id}', '${item.category || 1}')">
       <div class="card-poster-wrap">
+        <span class="source-pill-badge" style="background:${sBadge.bg};color:${sBadge.color};">${sBadge.icon} ${escapeHtml(sBadge.name)}</span>
         <img class="card-poster-img" src="${item.cover}" alt="${escapeHtml(cleanTitle)}" decoding="async" ${isHighPriority ? 'fetchpriority="high"' : 'loading="lazy"'} onerror="handleImgError(this)">
-        ${item.score ? `<span class="badge-top-right">★ ${item.score}</span>` : ''}
+        ${item.releaseDate ? `<span class="badge-top-right" style="background:linear-gradient(135deg, #f59e0b, #ef4444);color:#fff;font-weight:700;font-size:0.75rem;">⏳ ${escapeHtml(item.releaseDate)}</span>` : (item.score ? `<span class="badge-top-right">★ ${item.score}</span>` : '')}
         <div class="poster-bottom-info">
           <span class="poster-hd-tag">${domainLabel}</span>
         </div>
@@ -3292,7 +4731,6 @@ function renderWoxCard(item, isHighPriority = false) {
       <div class="card-details">
         <div class="card-name">${escapeHtml(cleanTitle)}</div>
         <div class="card-subtext">${escapeHtml(yearText)}</div>
-        ${item.score ? `<div class="rank-pill">TOP RANK ${Math.min(9, Math.floor(item.score))}</div>` : ''}
         <div style="display:flex;gap:0.4rem;margin-top:0.5rem;">
           <button class="btn-appointment" style="flex:1;" onclick="toggleAppointment(event, ${itemJson})">REMIND</button>
           <button class="btn-appointment" style="background:rgba(147,51,234,0.2);color:#c084fc;padding:0 0.5rem;" title="Add to Collection" onclick="toggleCollection(event, ${itemJson})">+</button>
@@ -3301,7 +4739,10 @@ function renderWoxCard(item, isHighPriority = false) {
     </div>
   `;
 }
-const renderLoklokCard = renderWoxCard;
+
+function renderLoklokCard(item, isHighPriority = false) {
+  return renderWoxCard(item, isHighPriority);
+}
 
 function saveSession(token, user) {
   const clean = (token === '1' || token === 'undefined' || token === 'null' || token.length < 8) ? '' : token;
@@ -3318,6 +4759,9 @@ function saveSession(token, user) {
     localStorage.removeItem('loklok_user');
   }
   initUserUI();
+  if (clean && typeof loadHistory === 'function') {
+    try { loadHistory(true); } catch (_) {}
+  }
 }
 
 function escapeHtml(str) {
@@ -3361,11 +4805,15 @@ window.handleSearchKeyUp = function(e) {
       dropdown.innerHTML = results.slice(0, 6).map(item => {
         const cleanTitle = String(item.title || '').replace(/^\[narto\]\s*/i, '').trim();
         return `
-          <div class="search-suggestion-item" onclick="openDetailModal('${item.id}', '${item.category || 1}'); document.getElementById('search-suggestions-dropdown').style.display='none';">
-            <img src="${item.cover}" style="width:36px;height:48px;object-fit:cover;border-radius:6px;" onerror="handleImgError(this)">
+          <div class="search-suggestion-item" onclick="openDetailModal('${item.id}', '${item.category || 1}'); document.getElementById('search-suggestions-dropdown').style.display='none';" style="display:flex; align-items:center; gap:0.85rem; padding:0.65rem 1rem; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.05);" onmouseover="this.style.background='rgba(0,255,255,0.08)'" onmouseout="this.style.background='transparent'">
+            <img src="${item.cover}" style="width:44px;height:60px;object-fit:cover;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.6);" onerror="handleImgError(this)">
             <div style="flex:1;min-width:0;">
-              <div style="font-weight:600;font-size:0.9rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(cleanTitle)}</div>
-              <div style="font-size:0.75rem;color:var(--text-muted);">★ ${item.score || '8.5'} • ${escapeHtml(item.sourceName || 'WOX Stream')}</div>
+              <div style="font-weight:700;font-size:1.05rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;">${escapeHtml(cleanTitle)}</div>
+              <div style="font-size:0.82rem;color:var(--text-muted);display:flex;align-items:center;gap:6px;">
+                <span style="color:#fbbf24;font-weight:700;">★ ${item.score || '8.5'}</span>
+                <span style="opacity:0.4;">•</span>
+                <span style="color:#38bdf8;font-weight:600;">${escapeHtml(item.sourceName || 'WOX Stream')}</span>
+              </div>
             </div>
           </div>
         `;
@@ -3579,8 +5027,9 @@ window.openStreamPartyModal = function() {
 
 window.createStreamPartyRoom = async function() {
   if (!state.currentMedia || !state.currentMedia.id) {
-    showToast('Please open or play a video first to start a Stream Party!');
-    return;
+    // Auto-fallback to featured show if user hasn't selected a media title yet
+    state.currentMedia = { id: 'wox_l_MjYyOA', title: 'Foundation Season 1', category: '1' };
+    state.currentEpisode = { id: '1', name: 'Episode 1' };
   }
 
   const u = state.user || {};
@@ -3595,8 +5044,8 @@ window.createStreamPartyRoom = async function() {
         mediaId: state.currentMedia.id,
         title: state.currentMedia.title || 'Untitled',
         cover: state.currentMedia.cover || '',
-        episodeId: state.currentEpisode ? state.currentEpisode.id : '',
-        episodeName: state.currentEpisode ? state.currentEpisode.name : '',
+        episodeId: state.currentEpisode ? state.currentEpisode.id : '1',
+        episodeName: state.currentEpisode ? state.currentEpisode.name : 'Episode 1',
         hostName,
         hostAvatar
       })
@@ -3675,15 +5124,19 @@ window.joinStreamPartyRoom = async function(roomCode) {
         badge.innerText = data.roomCode;
       }
 
-      // Auto-load host's current media if not open
+      // Auto-load & auto-play host's media title for synchronized watching
       const rMedia = data.room.media;
-      if (rMedia && rMedia.id && (!state.currentMedia || state.currentMedia.id !== rMedia.id)) {
-        openDetailModal(rMedia.id);
+      if (rMedia && rMedia.id) {
+        closeModal('modal-detail');
+        playVideo(
+          { id: rMedia.id, title: rMedia.title, cover: rMedia.cover, category: '1' },
+          { id: rMedia.episodeId || '1', name: rMedia.episodeName || 'Episode 1' }
+        );
       }
 
       openModal('modal-stream-party');
       startPartyPolling();
-      showToast(`Joined Stream Party ${data.roomCode}!`);
+      showToast(`Joined Stream Party ${data.roomCode}! 🍿`);
     } else {
       showToast(data.error || 'Stream Party room not found.');
     }
@@ -3890,6 +5343,33 @@ window.playPickedWheelItem = function() {
     openDetailModal(pickedWheelMedia.id, pickedWheelMedia.category || '1');
   } else {
     openDetailModal('wox_l_MTE1Mjk', '1');
+  }
+};
+
+let deferredPwaPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPwaPrompt = e;
+  const btn = document.getElementById('btn-pwa-install-row');
+  if (btn) btn.style.display = 'flex';
+});
+
+window.installPwaApp = async function() {
+  if (deferredPwaPrompt) {
+    deferredPwaPrompt.prompt();
+    const { outcome } = await deferredPwaPrompt.userChoice;
+    if (outcome === 'accepted') {
+      showToast('🚀 Installing WOX-Stream App to your home screen!');
+    }
+    deferredPwaPrompt = null;
+  } else {
+    // Instructions for iOS Safari and other browsers
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    if (isIos) {
+      showToast('📲 On iPhone/iPad: Tap the Share button in Safari and tap "Add to Home Screen"');
+    } else {
+      showToast('📲 Tap browser menu (⋮) and choose "Install App" or "Add to Home Screen"');
+    }
   }
 };
 

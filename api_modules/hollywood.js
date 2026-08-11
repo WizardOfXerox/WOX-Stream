@@ -1,155 +1,117 @@
-const { setCorsHeaders, maskId, unmaskId } = require('./_utils');
+const { setCorsHeaders, maskId, unmaskId, fixCoverUrl } = require('./_utils');
 
-// Timeout fetch utility
-async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
-    clearTimeout(id);
-    return response;
-  } catch (error) {
-    clearTimeout(id);
-    throw error;
+const TMDB_API_KEY = '4e44d9029b1270a757cddc766a1bcb63';
+const tmdbCache = new Map();
+
+// Helper to fetch TMDB API with caching
+async function fetchTmdb(endpoint) {
+  if (tmdbCache.has(endpoint)) {
+    return tmdbCache.get(endpoint);
   }
-}
-
-async function fetchVapi(endpoint) {
   try {
-    const res = await fetchWithTimeout(`https://vidsrc.to/vapi${endpoint}`);
+    const sep = endpoint.includes('?') ? '&' : '?';
+    const res = await fetch(`https://api.themoviedb.org/3${endpoint}${sep}api_key=${TMDB_API_KEY}`, {
+      signal: AbortSignal.timeout(6000),
+      headers: { 'Accept': 'application/json' }
+    });
     if (!res.ok) return null;
     const data = await res.json();
-    return data && data.result ? data.result : null;
-  } catch (e) {
-    console.error(`VAPI fetch error for ${endpoint}:`, e);
+    if (data) {
+      if (tmdbCache.size > 200) {
+        const firstKey = tmdbCache.keys().next().value;
+        tmdbCache.delete(firstKey);
+      }
+      tmdbCache.set(endpoint, data);
+    }
+    return data;
+  } catch (err) {
+    console.error(`TMDB fetch error for ${endpoint}:`, err.message);
     return null;
   }
 }
 
-function mapVapiItem(item, isMovie) {
-  const tmdb_id = item.tmdb_id || item.imdb_id;
-  if (!tmdb_id) return null;
-  
+function mapTmdbItem(item, isMovie) {
+  if (!item || !item.id) return null;
   const prefix = isMovie ? 'm_' : 't_';
   const category = isMovie ? '0' : '1';
   const domainType = isMovie ? 'MOVIE' : 'TV';
-  
+  const title = item.title || item.name || 'Untitled';
+  const poster = item.poster_path 
+    ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
+    : (item.backdrop_path ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}` : '');
+  const score = item.vote_average ? item.vote_average.toFixed(1) : '8.5';
+  const year = (item.release_date || item.first_air_date || '').substring(0, 4);
+
   return {
-    id: maskId('hollywood', `${prefix}${tmdb_id}`),
+    id: maskId('hollywood', `${prefix}${item.id}`),
     category,
-    title: item.title || 'Unknown Title',
-    cover: `https://img.vidsrc.vip/poster/${isMovie ? 'movie' : 'tv'}/${tmdb_id}.jpg`,
-    score: null,
+    title,
+    cover: fixCoverUrl(poster),
+    backdrop: item.backdrop_path ? `https://image.tmdb.org/t/p/w1280${item.backdrop_path}` : '',
+    score,
+    year,
     domainType,
     sourceName: 'Hollywood',
     sourceKey: 'hollywood'
   };
 }
+
 async function fetchHollywoodPaginated(page = 1, type = '', sort = 'count') {
   const isMovie = type !== 'TV';
-  const endpoint = sort === 'add' ? `/${isMovie ? 'movie' : 'tv'}/add/${page}` : `/${isMovie ? 'movie' : 'tv'}/new/${page}`;
-  const vapiItems = await fetchVapi(endpoint);
-  if (vapiItems && vapiItems.length > 0) {
-    return vapiItems.map(i => mapVapiItem(i, isMovie)).filter(Boolean);
+  const p = Math.max(1, parseInt(page, 10) || 1);
+  const endpoint = isMovie
+    ? (sort === 'score' ? `/movie/top_rated?page=${p}` : (sort === 'up' ? `/movie/now_playing?page=${p}` : `/trending/movie/week?page=${p}`))
+    : (sort === 'score' ? `/tv/top_rated?page=${p}` : (sort === 'up' ? `/tv/on_the_air?page=${p}` : `/trending/tv/week?page=${p}`));
+
+  const data = await fetchTmdb(endpoint);
+  if (data && Array.isArray(data.results) && data.results.length > 0) {
+    return data.results.map(i => mapTmdbItem(i, isMovie)).filter(Boolean);
   }
-  
-  // Fallback: If page 1 return curated popular movies, if page > 1 return empty to signal end
-  if (page === 1) {
-    const popularMovies = [
-      { id: '550', title: 'Fight Club', year: '1999', cover: 'https://image.tmdb.org/t/p/w500/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg' },
-      { id: '27205', title: 'Inception', year: '2010', cover: 'https://image.tmdb.org/t/p/w500/oYuLE1hZ8Q1V22bCX2l9n6pBxuv.jpg' },
-      { id: '157336', title: 'Interstellar', year: '2014', cover: 'https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg' },
-      { id: '155', title: 'The Dark Knight', year: '2008', cover: 'https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg' },
-      { id: '19995', title: 'Avatar', year: '2009', cover: 'https://image.tmdb.org/t/p/w500/kyeqWdyUXW608qlYkRqosgbbJyK.jpg' },
-      { id: '299536', title: 'Avengers: Infinity War', year: '2018', cover: 'https://image.tmdb.org/t/p/w500/7WsyChLLEzcqIInsightt1yX0OH8a.jpg' },
-      { id: '299534', title: 'Avengers: Endgame', year: '2019', cover: 'https://image.tmdb.org/t/p/w500/or06FN3Dka5tukK1e9vtnWknVGF.jpg' },
-      { id: '603', title: 'The Matrix', year: '2003', cover: 'https://image.tmdb.org/t/p/w500/f89U3HXqXmvu2EUBSEgZaWFrmGl.jpg' },
-      { id: '597', title: 'Titanic', year: '1997', cover: 'https://image.tmdb.org/t/p/w500/9xjZS2rlVxm8SFx8kFi3YwScWdC.jpg' },
-      { id: '671', title: "Harry Potter and the Philosopher's Stone", year: '2001', cover: 'https://image.tmdb.org/t/p/w500/wuMc22ipmy2Oi2svqYe23r9v32C.jpg' },
-      { id: '120', title: 'The Lord of the Rings: The Fellowship of the Ring', year: '2001', cover: 'https://image.tmdb.org/t/p/w500/6oom5WUlCTCh2ist1mKWvyswsNv.jpg' },
-      { id: '24428', title: 'The Avengers', year: '2012', cover: 'https://image.tmdb.org/t/p/w500/RYMX2wcKSpAr242RGlBvMB8RSx.jpg' }
-    ];
-    return popularMovies.map(m => ({
-      id: maskId('hollywood', `m_${m.id}`),
-      category: '0',
-      title: m.title,
-      cover: m.cover,
-      score: '8.8',
-      domainType: 'MOVIE',
-      sourceName: 'Hollywood',
-      sourceKey: 'hollywood'
-    }));
-  }
-  return [];
+
+  // Curated fallback
+  const curated = [
+    { id: 155, title: 'The Dark Knight', poster_path: '/qJ2tW6WMUDux911r6m7haRef0WH.jpg', vote_average: 8.5, release_date: '2008-07-18', overview: 'Batman raises the stakes in his war on crime.' },
+    { id: 27205, title: 'Inception', poster_path: '/oYuLE1hZ8Q1V22bCX2l9n6pBxuv.jpg', vote_average: 8.4, release_date: '2010-07-16', overview: 'Cobb, a skilled thief who steals secrets from deep within the subconscious during dream states.' },
+    { id: 157336, title: 'Interstellar', poster_path: '/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg', vote_average: 8.4, release_date: '2014-11-05', overview: 'A team of explorers travel through a wormhole in space in an attempt to ensure humanity survival.' }
+  ];
+  return curated.map(m => mapTmdbItem(m, true)).filter(Boolean);
 }
 
 async function fetchHollywoodShelves() {
   const shelves = [];
-  
-  const [newMovies, newTv, addedMovies, addedTv] = await Promise.all([
-    fetchVapi('/movie/new'),
-    fetchVapi('/tv/new'),
-    fetchVapi('/movie/add'),
-    fetchVapi('/tv/add')
+
+  const [trendingMovies, trendingTv, topRatedMovies, actionMovies] = await Promise.all([
+    fetchTmdb('/trending/movie/week'),
+    fetchTmdb('/trending/tv/week'),
+    fetchTmdb('/movie/top_rated'),
+    fetchTmdb('/discover/movie?with_genres=28&sort_by=popularity.desc')
   ]);
 
-  if (newMovies && newMovies.length > 0) {
+  if (trendingMovies && Array.isArray(trendingMovies.results) && trendingMovies.results.length > 0) {
     shelves.push({
-      title: "NEW MOVIE RELEASES",
-      items: newMovies.slice(0, 12).map(i => mapVapiItem(i, true)).filter(Boolean)
+      title: "TRENDING HOLLYWOOD MOVIES",
+      items: trendingMovies.results.slice(0, 12).map(i => mapTmdbItem(i, true)).filter(Boolean)
     });
   }
-  
-  if (newTv && newTv.length > 0) {
-    shelves.push({
-      title: "NEW TV SHOWS",
-      items: newTv.slice(0, 12).map(i => mapVapiItem(i, false)).filter(Boolean)
-    });
-  }
-  
-  if (addedMovies && addedMovies.length > 0) {
-    shelves.push({
-      title: "RECENTLY ADDED MOVIES",
-      items: addedMovies.slice(0, 12).map(i => mapVapiItem(i, true)).filter(Boolean)
-    });
-  }
-  
-  if (addedTv && addedTv.length > 0) {
-    shelves.push({
-      title: "RECENTLY ADDED TV",
-      items: addedTv.slice(0, 12).map(i => mapVapiItem(i, false)).filter(Boolean)
-    });
-  }
-  
-  if (shelves.length === 0) {
-    // Curated popular Hollywood blockbusters fallback
-    const popularMovies = [
-      { id: '550', title: 'Fight Club', year: '1999', cover: 'https://image.tmdb.org/t/p/w500/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg' },
-      { id: '27205', title: 'Inception', year: '2010', cover: 'https://image.tmdb.org/t/p/w500/oYuLE1hZ8Q1V22bCX2l9n6pBxuv.jpg' },
-      { id: '157336', title: 'Interstellar', year: '2014', cover: 'https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg' },
-      { id: '155', title: 'The Dark Knight', year: '2008', cover: 'https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg' },
-      { id: '19995', title: 'Avatar', year: '2009', cover: 'https://image.tmdb.org/t/p/w500/kyeqWdyUXW608qlYkRqosgbbJyK.jpg' },
-      { id: '299536', title: 'Avengers: Infinity War', year: '2018', cover: 'https://image.tmdb.org/t/p/w500/7WsyChLLEzcqIInsightt1yX0OH8a.jpg' },
-      { id: '299534', title: 'Avengers: Endgame', year: '2019', cover: 'https://image.tmdb.org/t/p/w500/or06FN3Dka5tukK1e9vtnWknVGF.jpg' },
-      { id: '603', title: 'The Matrix', year: '2003', cover: 'https://image.tmdb.org/t/p/w500/f89U3HXqXmvu2EUBSEgZaWFrmGl.jpg' },
-      { id: '597', title: 'Titanic', year: '1997', cover: 'https://image.tmdb.org/t/p/w500/9xjZS2rlVxm8SFx8kFi3YwScWdC.jpg' },
-      { id: '671', title: "Harry Potter and the Philosopher's Stone", year: '2001', cover: 'https://image.tmdb.org/t/p/w500/wuMc22ipmy2Oi2svqYe23r9v32C.jpg' },
-      { id: '120', title: 'The Lord of the Rings: The Fellowship of the Ring', year: '2001', cover: 'https://image.tmdb.org/t/p/w500/6oom5WUlCTCh2ist1mKWvyswsNv.jpg' },
-      { id: '24428', title: 'The Avengers', year: '2012', cover: 'https://image.tmdb.org/t/p/w500/RYMX2wcKSpAr242RGlBvMB8RSx.jpg' }
-    ];
 
+  if (trendingTv && Array.isArray(trendingTv.results) && trendingTv.results.length > 0) {
     shelves.push({
-      title: "HOLLYWOOD BLOCKBUSTERS",
-      items: popularMovies.map(m => ({
-        id: maskId('hollywood', `m_${m.id}`),
-        category: '0',
-        title: m.title,
-        cover: m.cover,
-        score: '8.8',
-        domainType: 'MOVIE',
-        sourceName: 'Hollywood',
-        sourceKey: 'hollywood'
-      }))
+      title: "POPULAR TV SERIES",
+      items: trendingTv.results.slice(0, 12).map(i => mapTmdbItem(i, false)).filter(Boolean)
+    });
+  }
+
+  if (topRatedMovies && Array.isArray(topRatedMovies.results) && topRatedMovies.results.length > 0) {
+    shelves.push({
+      title: "TOP RATED BLOCKBUSTERS",
+      items: topRatedMovies.results.slice(0, 12).map(i => mapTmdbItem(i, true)).filter(Boolean)
+    });
+  }
+
+  if (actionMovies && Array.isArray(actionMovies.results) && actionMovies.results.length > 0) {
+    shelves.push({
+      title: "HIGH-OCTANE ACTION HITS",
+      items: actionMovies.results.slice(0, 12).map(i => mapTmdbItem(i, true)).filter(Boolean)
     });
   }
 
@@ -157,144 +119,195 @@ async function fetchHollywoodShelves() {
 }
 
 async function searchHollywood(query) {
-  // Try finding an exact TMDB match if query looks like a number
-  if (/^\d+$/.test(query.trim())) {
-    return [
-      {
-        id: maskId('hollywood', `m_${query.trim()}`),
-        category: '0',
-        title: `Movie TMDB: ${query.trim()}`,
-        cover: `https://img.vidsrc.vip/poster/movie/${query.trim()}.jpg`,
-        score: null,
-        domainType: 'MOVIE',
-        sourceName: 'Hollywood',
-        sourceKey: 'hollywood'
-      },
-      {
-        id: maskId('hollywood', `t_${query.trim()}`),
-        category: '1',
-        title: `TV TMDB: ${query.trim()}`,
-        cover: `https://img.vidsrc.vip/poster/tv/${query.trim()}.jpg`,
-        score: null,
-        domainType: 'TV',
-        sourceName: 'Hollywood',
-        sourceKey: 'hollywood'
-      }
-    ];
-  }
-  
-  return [
-    {
-       id: maskId('hollywood', 'm_0'),
-       category: '0',
-       title: 'Search by TMDB ID directly for best results',
-       cover: '',
-       score: null,
-       domainType: 'MOVIE',
-       sourceName: 'Hollywood',
-       sourceKey: 'hollywood'
+  if (!query || !query.trim()) return [];
+  const q = query.trim();
+
+  // 1. If numeric TMDB ID directly
+  if (/^\d+$/.test(q)) {
+    const movieData = await fetchTmdb(`/movie/${q}`);
+    if (movieData && movieData.id) {
+      return [mapTmdbItem(movieData, true)];
     }
-  ];
+  }
+
+  if (q.toLowerCase().includes('documentary')) {
+    const docData = await fetchTmdb('/discover/movie?with_genres=99');
+    if (docData && Array.isArray(docData.results) && docData.results.length > 0) {
+      return docData.results.map(r => mapTmdbItem(r, true)).filter(Boolean);
+    }
+  }
+
+  // 2. Multi-search on TMDB
+  const searchData = await fetchTmdb(`/search/multi?query=${encodeURIComponent(q)}&include_adult=false`);
+  if (searchData && Array.isArray(searchData.results) && searchData.results.length > 0) {
+    return searchData.results
+      .filter(r => r.media_type === 'movie' || r.media_type === 'tv')
+      .map(r => mapTmdbItem(r, r.media_type === 'movie'))
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
-async function getDetail(maskedId, reqQuery) {
+async function getDetail(maskedId, reqQuery = {}) {
   const unmasked = unmaskId(maskedId);
   if (!unmasked || unmasked.provider !== 'hollywood') {
     throw new Error("Invalid Hollywood ID");
   }
-  
+
   const rawId = unmasked.id;
-  const isMovie = rawId.startsWith('m_');
-  const tmdbId = rawId.substring(2);
-  
-  const season = reqQuery.season || '1';
-  const episode = reqQuery.episode || '1';
-  
+  const isMovie = rawId.startsWith('m_') || rawId.startsWith('movie_') || (!rawId.startsWith('t_') && !rawId.startsWith('tv_') && reqQuery.category === '0');
+  const tmdbId = rawId.replace(/^(m_|movie_|t_|tv_)/i, '');
+
+  let season = reqQuery.season || '1';
+  let episode = reqQuery.episode || '1';
+
+  if (reqQuery.episodeId && typeof reqQuery.episodeId === 'string') {
+    const match = reqQuery.episodeId.match(/s(\d+)e(\d+)/i);
+    if (match) {
+      season = match[1];
+      episode = match[2];
+    }
+  }
+
+  // Fetch full details from TMDB
+  const tmdbData = await fetchTmdb(`/${isMovie ? 'movie' : 'tv'}/${tmdbId}`);
+
+  const title = tmdbData ? (tmdbData.title || tmdbData.name || `TMDB: ${tmdbId}`) : `Title ${tmdbId}`;
+  const posterPath = tmdbData && tmdbData.poster_path 
+    ? `https://image.tmdb.org/t/p/w500${tmdbData.poster_path}`
+    : (tmdbData && tmdbData.backdrop_path ? `https://image.tmdb.org/t/p/w780${tmdbData.backdrop_path}` : '');
+  const description = tmdbData && tmdbData.overview && tmdbData.overview.trim().length > 10
+    ? tmdbData.overview
+    : 'A captivating cinematic experience streaming in high definition from multiple source nodes.';
+  const score = tmdbData && tmdbData.vote_average ? tmdbData.vote_average.toFixed(1) : '8.5';
+  const year = tmdbData ? (tmdbData.release_date || tmdbData.first_air_date || '').substring(0, 4) : '2024';
+  const genres = tmdbData && Array.isArray(tmdbData.genres) 
+    ? tmdbData.genres.map(g => g.name).join(', ') 
+    : (isMovie ? 'Movie, Hollywood' : 'TV Series, Drama');
+
   const detail = {
     id: maskedId,
-    title: `TMDB ID: ${tmdbId}`,
-    cover: `https://img.vidsrc.vip/poster/${isMovie ? 'movie' : 'tv'}/${tmdbId}.jpg`,
-    description: 'Streaming from multiple HD sources',
+    title,
+    cover: fixCoverUrl(posterPath),
+    backdrop: tmdbData && tmdbData.backdrop_path ? `https://image.tmdb.org/t/p/w1280${tmdbData.backdrop_path}` : '',
+    description,
+    score,
+    year,
+    genres,
+    category: isMovie ? '0' : '1',
+    domainType: isMovie ? 'MOVIE' : 'TV',
     streamType: 'embed',
     sourceKey: 'hollywood',
     sourceName: 'Hollywood',
     isMovie,
     embedServers: [],
-    episodes: []
+    episodes: [],
+    seasons: [],
+    mirrors: [
+      { id: maskedId, sourceKey: 'hollywood', sourceName: 'Hollywood High-Speed Server', isDefault: true }
+    ]
   };
-  
+
   if (isMovie) {
     detail.embedServers = [
-      { name: 'VidLink', url: `https://vidlink.pro/movie/${tmdbId}` },
-      { name: 'VidSrc', url: `https://vidsrc.to/embed/movie/${tmdbId}` },
-      { name: 'Embed.su', url: `https://embed.su/embed/movie/${tmdbId}` },
-      { name: 'VidBinge', url: `https://vidbinge.dev/embed/movie/${tmdbId}` }
+      { name: 'VidLink (Fast HD)', url: `https://vidlink.pro/movie/${tmdbId}` },
+      { name: 'VidSrc (Multi-Sub)', url: `https://vidsrc.to/embed/movie/${tmdbId}` },
+      { name: 'Embed.su (Full HD)', url: `https://embed.su/embed/movie/${tmdbId}` },
+      { name: 'VidBinge (Ad-Free)', url: `https://vidbinge.dev/embed/movie/${tmdbId}` },
+      { name: 'SuperEmbed', url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1` }
     ];
     detail.episodes = [{ id: '1', name: 'Full Movie', episodeNumber: 1 }];
   } else {
     detail.embedServers = [
-      { name: 'VidLink', url: `https://vidlink.pro/tv/${tmdbId}/${season}/${episode}` },
-      { name: 'VidSrc', url: `https://vidsrc.to/embed/tv/${tmdbId}/${season}/${episode}` },
-      { name: 'Embed.su', url: `https://embed.su/embed/tv/${tmdbId}/${season}/${episode}` },
-      { name: 'VidBinge', url: `https://vidbinge.dev/embed/tv/${tmdbId}/${season}/${episode}` }
+      { name: 'VidLink (Fast HD)', url: `https://vidlink.pro/tv/${tmdbId}/${season}/${episode}` },
+      { name: 'VidSrc (Multi-Sub)', url: `https://vidsrc.to/embed/tv/${tmdbId}/${season}/${episode}` },
+      { name: 'Embed.su (Full HD)', url: `https://embed.su/embed/tv/${tmdbId}/${season}/${episode}` },
+      { name: 'VidBinge (Ad-Free)', url: `https://vidbinge.dev/embed/tv/${tmdbId}/${season}/${episode}` },
+      { name: 'SuperEmbed', url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1&s=${season}&e=${episode}` }
     ];
-    detail.episodes = [{ id: `s${season}e${episode}`, name: `S${season} E${episode}`, episodeNumber: parseInt(episode, 10) || 1 }];
+
+    // Build real episodes list across ALL seasons
+    const numSeasons = tmdbData && tmdbData.number_of_seasons ? Math.min(10, tmdbData.number_of_seasons) : 1;
+    const seasonPromises = [];
+    for (let s = 1; s <= numSeasons; s++) {
+      seasonPromises.push(fetchTmdb(`/tv/${tmdbId}/season/${s}`));
+    }
+
+    const seasonsData = await Promise.all(seasonPromises);
+    const allEpisodes = [];
+    const allSeasons = [];
+
+    seasonsData.forEach((sData, idx) => {
+      const sNum = idx + 1;
+      if (sData && Array.isArray(sData.episodes) && sData.episodes.length > 0) {
+        const epList = sData.episodes.map(ep => ({
+          id: `s${sNum}e${ep.episode_number}`,
+          seasonNumber: sNum,
+          episodeNumber: ep.episode_number,
+          name: `S${sNum} E${ep.episode_number}: ${ep.name || `Episode ${ep.episode_number}`}`,
+          overview: ep.overview || ''
+        }));
+        allEpisodes.push(...epList);
+        allSeasons.push({ seasonNumber: sNum, name: `Season ${sNum}`, episodes: epList });
+      }
+    });
+
+    if (allEpisodes.length === 0) {
+      const epCount = (tmdbData && tmdbData.number_of_episodes) ? Math.min(30, tmdbData.number_of_episodes) : 12;
+      allEpisodes.push(...Array.from({ length: epCount }, (_, i) => ({
+        id: `s1e${i + 1}`,
+        seasonNumber: 1,
+        episodeNumber: i + 1,
+        name: `Episode ${i + 1}`
+      })));
+    }
+
+    detail.episodes = allEpisodes;
+    detail.seasons = allSeasons;
   }
-  
+
   return detail;
 }
 
 const handler = async (req, res) => {
   setCorsHeaders(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
-  
+
   const { action, id, q, tmdbId, type, season, episode } = req.query;
-  
+
   try {
     if (action === 'catalog' || !action) {
       const shelves = await fetchHollywoodShelves();
       return res.json({ success: true, shelves });
     }
-    
+
     if (action === 'detail' && id) {
       const detail = await getDetail(id, req.query);
-      return res.json({ success: true, detail });
+      return res.json({ success: true, detail, data: detail, ...detail });
     }
-    
-    if (action === 'search' && q) {
-      const results = await searchHollywood(q);
-      return res.json({ success: true, results });
+
+    if ((action === 'stream' || action === 'episode') && id) {
+      const detail = await getDetail(id, req.query);
+      if (detail && detail.embedServers && detail.embedServers.length > 0) {
+        return res.json({
+          success: true,
+          playUrl: detail.embedServers[0].url,
+          streamType: 'embed',
+          embedServers: detail.embedServers
+        });
+      }
     }
-    
-    if (action === 'resolve' && tmdbId && type) {
-      const s = season || '1';
-      const e = episode || '1';
-      const embedServers = type === 'movie' 
-        ? [
-            { name: 'VidLink', url: `https://vidlink.pro/movie/${tmdbId}` },
-            { name: 'VidSrc', url: `https://vidsrc.to/embed/movie/${tmdbId}` },
-            { name: 'Embed.su', url: `https://embed.su/embed/movie/${tmdbId}` },
-            { name: 'VidBinge', url: `https://vidbinge.dev/embed/movie/${tmdbId}` }
-          ]
-        : [
-            { name: 'VidLink', url: `https://vidlink.pro/tv/${tmdbId}/${s}/${e}` },
-            { name: 'VidSrc', url: `https://vidsrc.to/embed/tv/${tmdbId}/${s}/${e}` },
-            { name: 'Embed.su', url: `https://embed.su/embed/tv/${tmdbId}/${s}/${e}` },
-            { name: 'VidBinge', url: `https://vidbinge.dev/embed/tv/${tmdbId}/${s}/${e}` }
-          ];
-          
-      return res.json({ success: true, embedServers });
-    }
-    
-    return res.status(400).json({ success: false, error: 'Invalid action or parameters' });
+
+    return res.status(400).json({ success: false, error: 'Invalid parameters' });
   } catch (err) {
-    console.error('Hollywood Error:', err);
+    console.error('Hollywood handler error:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 };
 
 module.exports = handler;
-module.exports.fetchHollywoodShelves = fetchHollywoodShelves;
 module.exports.fetchHollywoodPaginated = fetchHollywoodPaginated;
+module.exports.fetchHollywoodShelves = fetchHollywoodShelves;
 module.exports.searchHollywood = searchHollywood;
 module.exports.getDetail = getDetail;

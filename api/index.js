@@ -26,10 +26,11 @@ const MODULE_REGISTRY = {
   'hstream': require('../api_modules/hstream'),
   'hentaimama': require('../api_modules/hentaimama'),
   'adult': require('../api_modules/adult'),
-  'viva': require('../api_modules/viva'),
   'anime-provider': require('../api_modules/anime-provider'),
   'import-db': require('../api_modules/import-db'),
-  'stream-party': require('../api_modules/stream-party')
+  'stream-party': require('../api_modules/stream-party'),
+  'cover-lookup': require('../api_modules/cover-lookup'),
+  'resolve-embed': require('../api_modules/resolve-embed')
 };
 
 // Single Vercel Serverless Function entry point
