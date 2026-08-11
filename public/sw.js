@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wox-stream-cache-v11';
+const CACHE_NAME = 'wox-stream-cache-v12';
 const STATIC_ASSETS = [
   '/',
   '/style.css',

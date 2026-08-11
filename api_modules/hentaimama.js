@@ -104,22 +104,19 @@ async function getHentaiMamaDetail(id) {
     if (!pageRes.ok) return null;
     const html = await pageRes.text();
 
-    // Robust title extraction (ignoring header navbar logo <h1 class="logo">Hentaimama</h1>)
-    const titleMatch = html.match(/<h1[^>]*class=["'][^"']*entry-title[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i) ||
-                       html.match(/<h1[^>]*class=["'][^"']*title[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i) ||
-                       html.match(/<div class="data"><h3>([\s\S]*?)<\/h3>/i) ||
-                       html.match(/<h1[^>]*class=["'][^"']*epih1[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i);
-
-    let rawTitle = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '').trim() : '';
-    if (!rawTitle || rawTitle.toLowerCase() === 'hentaimama') {
-      const altTitleMatch = [...html.matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/gi)];
-      for (const m of altTitleMatch) {
-        const text = m[1].replace(/<[^>]+>/g, '').trim();
-        if (text && text.toLowerCase() !== 'hentaimama') {
-          rawTitle = text;
-          break;
-        }
+    // Robust title extraction (filter out header navbar logo <h1 class="text">Hentaimama</h1>)
+    const allH1s = [...html.matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/gi)];
+    let rawTitle = '';
+    for (const m of allH1s) {
+      const text = m[1].replace(/<[^>]+>/g, '').trim();
+      if (text && text.toLowerCase() !== 'hentaimama') {
+        rawTitle = text;
+        break;
       }
+    }
+    if (!rawTitle) {
+      const h3Match = html.match(/<div class="data"><h3>([\s\S]*?)<\/h3>/i);
+      if (h3Match) rawTitle = h3Match[1].replace(/<[^>]+>/g, '').trim();
     }
     if (!rawTitle) rawTitle = rawSlug.replace(/-/g, ' ');
 
@@ -130,13 +127,13 @@ async function getHentaiMamaDetail(id) {
                       html.match(/<div class="entry-content">[\s\S]*?<p>([\s\S]*?)<\/p>/i);
     const description = descMatch ? decodeHTMLEntities(descMatch[1].replace(/<[^>]+>/g, '').trim()) : '';
 
-    // Poster image extraction
-    const imgMatch = html.match(/data-lazy-src=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i) ||
-                     html.match(/data-src=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i) ||
-                     html.match(/<div class="poster">[\s\S]*?<img[^>]+src=["']([^"']+)["']/i) ||
-                     html.match(/<img[^>]+src=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i);
+    // Robust Poster image extraction (supports data-src, data-lazy-src, and noscript img)
+    const imgMatch = html.match(/<div class="poster">[\s\S]*?<img[^>]+data-src=["']([^"']+)["']/i) ||
+                     html.match(/data-src=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i) ||
+                     html.match(/data-lazy-src=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i) ||
+                     html.match(/<noscript><img[^>]+src=["']([^"']+)["']/i);
 
-    let cover = imgMatch ? imgMatch[1] : '';
+    let cover = imgMatch ? (imgMatch[1] || imgMatch[2]) : '';
     if (cover.startsWith('/')) cover = BASE_URL + cover;
     cover = fixCoverUrl(cover);
 
