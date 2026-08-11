@@ -162,6 +162,24 @@ window.filterCategoryNav = function(name, typeVal, regionVal = '', sourceVal = '
   executeCategorySearch(true);
 };
 
+window.triggerCategorySearch = function() {
+  const input = document.getElementById('category-search-input');
+  const keyword = input ? input.value.trim() : '';
+  state.filters.keyword = keyword;
+  const clearBtn = document.getElementById('btn-clear-category-search');
+  if (clearBtn) clearBtn.style.display = keyword ? 'inline-block' : 'none';
+  executeCategorySearch(true);
+};
+
+window.clearCategorySearch = function() {
+  const input = document.getElementById('category-search-input');
+  if (input) input.value = '';
+  state.filters.keyword = '';
+  const clearBtn = document.getElementById('btn-clear-category-search');
+  if (clearBtn) clearBtn.style.display = 'none';
+  executeCategorySearch(true);
+};
+
 window.toggleFilterOptions = function() {
   const box = document.getElementById('filter-box');
   const btn = document.getElementById('collapse-btn');
@@ -4394,6 +4412,7 @@ async function executeCategorySearch(isReset = true) {
 
   try {
     const isDedupDisabled = localStorage.getItem('wox_disable_dedup') === 'true';
+    const catKeyword = state.filters.keyword || '';
     const queryParams = new URLSearchParams({
       params: state.filters.params || 'MOVIE,TV,VARIETY,COMIC,DOCUMENTARY,MINISERIES',
       area: state.filters.area || '',
@@ -4406,6 +4425,7 @@ async function executeCategorySearch(isReset = true) {
       allowAdult: String(state.settings.allowAdult || false),
       dedup: isDedupDisabled ? 'false' : 'true'
     });
+    if (catKeyword) queryParams.set('keyword', catKeyword);
 
     const res = await fetch(`/api/search?${queryParams.toString()}`);
     const data = await res.json();
