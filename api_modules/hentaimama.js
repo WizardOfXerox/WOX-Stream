@@ -3,14 +3,29 @@
  * Base URL: https://hentaimama.io
  */
 
-const { setCorsHeaders, maskId, unmaskId } = require('./_utils');
+const { setCorsHeaders, maskId, unmaskId, fixCoverUrl } = require('./_utils');
 
 const BASE_URL = 'https://hentaimama.io';
 
 const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
   'Referer': `${BASE_URL}/`
 };
+
+function decodeHTMLEntities(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 async function fetchHentaiMamaCatalog(page = 1, query = '') {
   try {
@@ -23,19 +38,33 @@ async function fetchHentaiMamaCatalog(page = 1, query = '') {
     const html = await res.text();
 
     const items = [];
-    const articleRegex = /<article[^>]*>[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>[\s\S]*?<img[^>]+(?:data-src|src)="([^"]+)"[^>]*>[\s\S]*?<h3[^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/gi;
+    const articleRegex = /<article[^>]*>([\s\S]*?)<\/article>/gi;
     let match;
 
     while ((match = articleRegex.exec(html)) !== null) {
-      const href = match[1];
-      const cover = match[2];
-      const rawTitle = match[3].replace(/<[^>]+>/g, '').trim();
+      const snippet = match[1];
+      const hrefMatch = snippet.match(/href=["']([^"']+)["']/i);
+      if (!hrefMatch) continue;
+      const href = hrefMatch[1];
 
       const slugMatch = href.match(/\/(?:tvshows|hentai|episodes)\/([^/?#]+)/);
       if (!slugMatch) continue;
       const targetSlug = slugMatch[1].trim('/');
 
-      const cleanTitle = rawTitle.replace(/\s*-\s*\d+$/i, '').trim();
+      // Robust title extraction & decoding
+      const titleMatch = snippet.match(/<h3[^>]*>[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/i) || snippet.match(/alt=["']([^"']+)["']/i);
+      const rawTitle = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '').trim() : targetSlug;
+      const cleanTitle = decodeHTMLEntities(rawTitle.replace(/\s*-\s*\d+$/i, '').trim());
+
+      // Robust image extraction (skip data:image 1x1 lazyload placeholders)
+      const imgMatch = snippet.match(/data-lazy-src=["']([^"']+)["']/i) ||
+                       snippet.match(/data-src=["']([^"']+)["']/i) ||
+                       snippet.match(/srcset=["'](https?:\/\/[^\s"']+)["']/i) ||
+                       snippet.match(/src=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i);
+
+      let cover = imgMatch ? imgMatch[1] : '';
+      if (cover.startsWith('/')) cover = BASE_URL + cover;
+      cover = fixCoverUrl(cover);
 
       items.push({
         id: maskId('hentaimama', targetSlug),
@@ -64,25 +93,54 @@ async function fetchHentaiMamaCatalog(page = 1, query = '') {
 async function getHentaiMamaDetail(id) {
   try {
     const { id: rawSlug } = unmaskId(id);
-    const targetUrl = `${BASE_URL}/tvshows/${rawSlug}/`;
 
+    // Try tvshows endpoint first, then hentai endpoint
+    let targetUrl = `${BASE_URL}/tvshows/${rawSlug}/`;
     let pageRes = await fetch(targetUrl, { headers: HEADERS });
     if (!pageRes.ok) {
-      pageRes = await fetch(`${BASE_URL}/hentai/${rawSlug}/`, { headers: HEADERS });
+      targetUrl = `${BASE_URL}/hentai/${rawSlug}/`;
+      pageRes = await fetch(targetUrl, { headers: HEADERS });
     }
     if (!pageRes.ok) return null;
     const html = await pageRes.text();
 
-    const titleMatch = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || html.match(/<div class="data"><h3>([\s\S]*?)<\/h3>/i);
-    const rawTitle = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '').trim() : rawSlug;
+    // Robust title extraction (ignoring header navbar logo <h1 class="logo">Hentaimama</h1>)
+    const titleMatch = html.match(/<h1[^>]*class=["'][^"']*entry-title[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i) ||
+                       html.match(/<h1[^>]*class=["'][^"']*title[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i) ||
+                       html.match(/<div class="data"><h3>([\s\S]*?)<\/h3>/i) ||
+                       html.match(/<h1[^>]*class=["'][^"']*epih1[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i);
 
-    const descMatch = html.match(/<div class="wp-content">[\s\S]*?<p>([\s\S]*?)<\/p>/i);
-    const description = descMatch ? descMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+    let rawTitle = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+    if (!rawTitle || rawTitle.toLowerCase() === 'hentaimama') {
+      const altTitleMatch = [...html.matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/gi)];
+      for (const m of altTitleMatch) {
+        const text = m[1].replace(/<[^>]+>/g, '').trim();
+        if (text && text.toLowerCase() !== 'hentaimama') {
+          rawTitle = text;
+          break;
+        }
+      }
+    }
+    if (!rawTitle) rawTitle = rawSlug.replace(/-/g, ' ');
 
-    const imgMatch = html.match(/<div class="poster">[\s\S]*?<img[^>]+(?:data-src|src)="([^"]+)"/i);
-    const cover = imgMatch ? imgMatch[1] : '';
+    const cleanTitle = decodeHTMLEntities(rawTitle);
 
-    // Episodes
+    // Description extraction
+    const descMatch = html.match(/<div class="wp-content">[\s\S]*?<p>([\s\S]*?)<\/p>/i) ||
+                      html.match(/<div class="entry-content">[\s\S]*?<p>([\s\S]*?)<\/p>/i);
+    const description = descMatch ? decodeHTMLEntities(descMatch[1].replace(/<[^>]+>/g, '').trim()) : '';
+
+    // Poster image extraction
+    const imgMatch = html.match(/data-lazy-src=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i) ||
+                     html.match(/data-src=["']([^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i) ||
+                     html.match(/<div class="poster">[\s\S]*?<img[^>]+src=["']([^"']+)["']/i) ||
+                     html.match(/<img[^>]+src=["'](https?:\/\/[^"']+\.(?:jpg|jpeg|png|webp)[^"']*)["']/i);
+
+    let cover = imgMatch ? imgMatch[1] : '';
+    if (cover.startsWith('/')) cover = BASE_URL + cover;
+    cover = fixCoverUrl(cover);
+
+    // Episodes extraction
     const epRegex = /<a[^>]+href="([^"]*\/episodes\/[^"]+)"[^>]*>/gi;
     let epMatch;
     const episodes = [];
@@ -117,7 +175,7 @@ async function getHentaiMamaDetail(id) {
 
     return {
       id: id,
-      title: rawTitle,
+      title: cleanTitle,
       cover: cover,
       description: description,
       year: '2024',
