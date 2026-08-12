@@ -116,7 +116,7 @@ module.exports = async (req, res) => {
           title: '💎 ASIAN SHORT DRAMAS (BILLIONAIRE & REVENGE)',
           type: 'NARTO_SHELF',
           items: robustDeduplicate(nartoItems.map(nItem => ({
-            id: maskId('narto', nItem.slug || nItem.id),
+            id: maskId('narto', nItem.slug || String(nItem.id || '').replace(/^narto_/, '').replace(/^wox_n_/, '')),
             category: '1',
             title: (nItem.title || '').replace(/^\[narto\]\s*/i, '').trim(),
             cover: nItem.cover,

@@ -313,14 +313,40 @@ const TYPE_CONFIG = {
       return textBlob.includes('documentary') || textBlob.includes('docuseries') || textBlob.includes('bbc earth') || textBlob.includes('nature');
     }
   },
-  'MINISERIES': {
+  'SHORT,MINISERIES,SHORT_DRAMA': {
     name: 'short drama',
-    queries: ['short drama', 'billionaire drama', 'revenge drama', 'shorts', 'dramabox', 'shortmax', 'mini series'],
+    queries: ['short drama', 'billionaire', 'revenge', 'ceo', 'shorts', 'miniseries', 'mini series', 'dramabox', 'shortmax'],
     match: (domain, textBlob, item) => {
       const d = String(domain || item.domainType || item.category || '').toUpperCase();
-      if (d === 'MINISERIES' || item.sourceKey === 'narto' || item.isNarto) return true;
+      if (d === 'MINISERIES' || d === 'SHORT' || d === 'SHORT_DRAMA' || item.sourceKey === 'narto' || item.isNarto) return true;
       if (d === 'MOVIE' || d === '0') return false;
-      return textBlob.includes('short drama') || textBlob.includes('shorts') || textBlob.includes('dramabox') || textBlob.includes('miniseries');
+      const kw = String(item.searchKw || '').toLowerCase();
+      if (kw.includes('short') || kw.includes('miniseries') || kw.includes('dramabox')) return true;
+      return textBlob.includes('short') || textBlob.includes('miniseries') || textBlob.includes('dramabox') || textBlob.includes('narto');
+    }
+  },
+  'MINISERIES': {
+    name: 'short drama',
+    queries: ['short drama', 'billionaire', 'revenge', 'ceo', 'shorts', 'miniseries', 'mini series', 'dramabox', 'shortmax'],
+    match: (domain, textBlob, item) => {
+      const d = String(domain || item.domainType || item.category || '').toUpperCase();
+      if (d === 'MINISERIES' || d === 'SHORT' || d === 'SHORT_DRAMA' || item.sourceKey === 'narto' || item.isNarto) return true;
+      if (d === 'MOVIE' || d === '0') return false;
+      const kw = String(item.searchKw || '').toLowerCase();
+      if (kw.includes('short') || kw.includes('miniseries') || kw.includes('dramabox')) return true;
+      return textBlob.includes('short') || textBlob.includes('miniseries') || textBlob.includes('dramabox') || textBlob.includes('narto');
+    }
+  },
+  'SHORT': {
+    name: 'short drama',
+    queries: ['short drama', 'billionaire', 'revenge', 'ceo', 'shorts', 'miniseries', 'mini series', 'dramabox', 'shortmax'],
+    match: (domain, textBlob, item) => {
+      const d = String(domain || item.domainType || item.category || '').toUpperCase();
+      if (d === 'MINISERIES' || d === 'SHORT' || d === 'SHORT_DRAMA' || item.sourceKey === 'narto' || item.isNarto) return true;
+      if (d === 'MOVIE' || d === '0') return false;
+      const kw = String(item.searchKw || '').toLowerCase();
+      if (kw.includes('short') || kw.includes('miniseries') || kw.includes('dramabox')) return true;
+      return textBlob.includes('short') || textBlob.includes('miniseries') || textBlob.includes('dramabox') || textBlob.includes('narto');
     }
   }
 };
@@ -968,7 +994,7 @@ async function searchHandler(req, res) {
         }
 
         let mapped = nartoItems.map(nItem => ({
-          id: maskId('narto', nItem.id),
+          id: maskId('narto', nItem.slug || String(nItem.id || '').replace(/^narto_/, '').replace(/^wox_n_/, '')),
           category: '1',
           title: (nItem.title || '').replace(/^\[narto\]\s*/i, '').trim(),
           cover: nItem.cover,
@@ -1167,7 +1193,7 @@ async function searchHandler(req, res) {
             new Promise(resolve => setTimeout(resolve, 1500))
           ]);
           return { type: 'narto', items: nItems.slice(0, 30).map(nItem => ({
-            id: maskId('narto', nItem.id),
+            id: maskId('narto', nItem.slug || String(nItem.id || '').replace(/^narto_/, '').replace(/^wox_n_/, '')),
             category: '1',
             title: String(nItem.title || '').replace(/^\[narto\]\s*/i, '').trim(),
             cover: nItem.cover,
