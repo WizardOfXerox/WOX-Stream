@@ -137,7 +137,13 @@ window.filterCategoryNav = function(name, typeVal, regionVal = '', sourceVal = '
   state.filters.params = typeVal || '';
   state.filters.area = regionVal || '';
   state.filters.category = genreVal || '';
-  
+  state.filters.keyword = '';
+
+  const catInput = document.getElementById('category-search-input');
+  if (catInput) catInput.value = '';
+  const clearBtn = document.getElementById('btn-clear-category-search');
+  if (clearBtn) clearBtn.style.display = 'none';
+
   updatePillState('pills-source', sourceVal || '');
   updatePillState('pills-type', typeVal || '');
   updatePillState('pills-region', regionVal || '');
@@ -159,7 +165,6 @@ window.filterCategoryNav = function(name, typeVal, regionVal = '', sourceVal = '
   history.replaceState({ view: 'category' }, '', newQuery);
 
   switchNav('category', false);
-  executeCategorySearch(true);
 };
 
 window.triggerCategorySearch = function() {
@@ -4808,13 +4813,15 @@ async function executeKeywordSearch(query) {
   }
 }
 
-window.executeKeywordSearch = executeKeywordSearch;
+let _categorySearchRequestId = 0;
 
 async function executeCategorySearch(isReset = true) {
   const grid = document.getElementById('category-grid');
   const spEl = document.getElementById('infinite-scroll-spinner');
   const txtEl = document.getElementById('infinite-scroll-text');
   if (!grid) return;
+
+  const currentReqId = isReset ? ++_categorySearchRequestId : _categorySearchRequestId;
 
   if (isReset) {
     state.filters.page = 0;
@@ -4851,6 +4858,10 @@ async function executeCategorySearch(isReset = true) {
 
     const res = await fetch(`/api/search?${queryParams.toString()}`);
     const data = await res.json();
+
+    if (currentReqId !== _categorySearchRequestId) {
+      return;
+    }
 
     const rawResults = data.results || [];
     const filtered = filterContentBySettings(rawResults).filter(item => {
