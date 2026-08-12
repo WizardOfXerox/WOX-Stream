@@ -3890,142 +3890,9 @@ window.openLoginModal = function() {
   openModal('modal-login');
 };
 
-window.switchAuthTab = function(tab) {
-  const loginTab = document.getElementById('tab-auth-login');
-  const regTab = document.getElementById('tab-auth-register');
-  const loginForm = document.getElementById('form-auth-login');
-  const regForm = document.getElementById('form-auth-register');
-  const errEl = document.getElementById('auth-error-msg');
-  if (errEl) errEl.style.display = 'none';
 
-  if (tab === 'register') {
-    if (loginForm) loginForm.style.display = 'none';
-    if (regForm) regForm.style.display = 'flex';
-    if (loginTab) {
-      loginTab.style.fontWeight = '500';
-      loginTab.style.color = 'var(--text-muted)';
-      loginTab.style.borderBottom = 'none';
-    }
-    if (regTab) {
-      regTab.style.fontWeight = '700';
-      regTab.style.color = '#fff';
-      regTab.style.borderBottom = '2px solid #ec4899';
-    }
-  } else {
-    if (regForm) regForm.style.display = 'none';
-    if (loginForm) loginForm.style.display = 'flex';
-    if (loginTab) {
-      loginTab.style.fontWeight = '700';
-      loginTab.style.color = '#fff';
-      loginTab.style.borderBottom = '2px solid var(--accent-cyan)';
-    }
-    if (regTab) {
-      regTab.style.fontWeight = '500';
-      regTab.style.color = 'var(--text-muted)';
-      regTab.style.borderBottom = 'none';
-    }
-  }
-};
 
-window.handleWoxLogin = async function(e) {
-  if (e) e.preventDefault();
-  const identifier = document.getElementById('login-identifier') ? document.getElementById('login-identifier').value.trim() : '';
-  const password = document.getElementById('login-password') ? document.getElementById('login-password').value.trim() : '';
-  const errEl = document.getElementById('auth-error-msg');
 
-  if (!identifier || !password) {
-    if (errEl) {
-      errEl.innerText = 'Please enter your username/email and password.';
-      errEl.style.display = 'block';
-    }
-    return;
-  }
-
-  try {
-    const res = await fetch('/api/auth?action=login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ emailOrUsername: identifier, password: password })
-    });
-    const data = await res.json();
-
-    if (data.success && data.token) {
-      state.token = data.token;
-      state.user = data.user;
-      localStorage.setItem('loklok_token', data.token);
-      localStorage.setItem('loklok_user', JSON.stringify(data.user));
-
-      initUserUI();
-      closeModal('modal-login');
-      showToast(`Welcome back, ${data.user.username || data.user.nickName || 'User'}!`);
-    } else {
-      if (errEl) {
-        errEl.innerText = data.error || 'Invalid credentials.';
-        errEl.style.display = 'block';
-      }
-    }
-  } catch (err) {
-    if (errEl) {
-      errEl.innerText = 'Connection error. Please try again.';
-      errEl.style.display = 'block';
-    }
-  }
-};
-
-window.handleWoxRegister = async function(e) {
-  if (e) e.preventDefault();
-  const username = document.getElementById('reg-username') ? document.getElementById('reg-username').value.trim() : '';
-  const email = document.getElementById('reg-email') ? document.getElementById('reg-email').value.trim() : '';
-  const password = document.getElementById('reg-password') ? document.getElementById('reg-password').value.trim() : '';
-  const errEl = document.getElementById('auth-error-msg');
-
-  if (!username || !email || !password) {
-    if (errEl) {
-      errEl.innerText = 'Please fill out all fields.';
-      errEl.style.display = 'block';
-    }
-    return;
-  }
-
-  try {
-    const res = await fetch('/api/auth?action=register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email, password })
-    });
-    const data = await res.json();
-
-    if (data.success && data.token) {
-      state.token = data.token;
-      state.user = data.user;
-      localStorage.setItem('loklok_token', data.token);
-      localStorage.setItem('loklok_user', JSON.stringify(data.user));
-
-      initUserUI();
-      closeModal('modal-login');
-      showToast(`Account created! Welcome, ${data.user.username}!`);
-    } else {
-      if (errEl) {
-        errEl.innerText = data.error || 'Registration failed.';
-        errEl.style.display = 'block';
-      }
-    }
-  } catch (err) {
-    if (errEl) {
-      errEl.innerText = 'Connection error. Please try again.';
-      errEl.style.display = 'block';
-    }
-  }
-};
-
-window.handleLogout = function() {
-  localStorage.removeItem('loklok_token');
-  localStorage.removeItem('loklok_user');
-  state.token = '';
-  state.user = null;
-  initUserUI();
-  showToast('Signed out of WOX-Stream.');
-};
 
 window.toggleUserDropdown = function(e) {
   if (e) e.stopPropagation();
@@ -5296,19 +5163,7 @@ function saveSession(token, user) {
   }
 }
 
-function escapeHtml(str) {
-  if (str === null || str === undefined) return '';
-  const decoded = decodeHTMLEntitiesClient(str);
-  return String(decoded).replace(/[&<>"']/g, match => {
-    return {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#039;'
-    }[match];
-  });
-}
+
 
 let searchDebounceTimer = null;
 const searchCache = new Map();
