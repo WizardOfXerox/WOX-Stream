@@ -447,13 +447,21 @@ window.handleRoute = function(urlStr) {
     switchNav('category', false);
   } else if (view === 'calendar' || pathname === '/calendar') {
     switchNav('calendar', false);
-  } else if (view === 'history' || pathname === '/history') {
+  } else if (view === 'reminders' || pathname === '/reminders' || pathname.startsWith('/profile/reminders')) {
     switchNav('history', false);
+    switchProfileTab('appointment', false);
+  } else if (view === 'collection' || pathname === '/collection' || pathname.startsWith('/profile/collection')) {
+    switchNav('history', false);
+    switchProfileTab('collection', false);
+  } else if (view === 'account' || pathname === '/account' || view === 'profile' || pathname === '/profile' || pathname.startsWith('/profile/account')) {
+    switchNav('history', false);
+    switchProfileTab('account', false);
+  } else if (view === 'history' || pathname === '/history') {
+    const subTab = search.get('tab') || 'history';
+    switchNav('history', false);
+    switchProfileTab(subTab, false);
   } else if (view === 'watchlist' || pathname === '/watchlist') {
     switchNav('watchlist', false);
-  } else if (view === 'profile' || pathname === '/profile') {
-    switchNav('history', false);
-    switchProfileTab('account');
   } else if (view === 'search' || pathname === '/search') {
     switchNav('search', false);
   } else {
@@ -2704,7 +2712,7 @@ window.toggleAppointment = async function(event, itemJsonStr) {
   }
 };
 
-window.switchProfileTab = async function(tabName) {
+window.switchProfileTab = async function(tabName, updateUrl = true) {
   state.activeProfileTab = tabName;
 
   const tabBtns = document.querySelectorAll('#history-subnav .history-subnav-btn');
@@ -2712,6 +2720,17 @@ window.switchProfileTab = async function(tabName) {
 
   const activeBtn = Array.from(tabBtns).find(b => b.getAttribute('onclick') && b.getAttribute('onclick').includes(tabName));
   if (activeBtn) activeBtn.classList.add('active');
+
+  if (updateUrl) {
+    let targetPath = '/history';
+    if (tabName === 'appointment') targetPath = '/reminders';
+    else if (tabName === 'collection') targetPath = '/collection';
+    else if (tabName === 'account') targetPath = '/account';
+
+    if (window.location.pathname !== targetPath) {
+      history.pushState({ view: 'history', tab: tabName }, '', targetPath);
+    }
+  }
 
   const historyGrid = document.getElementById('history-grid');
   const historyControls = document.getElementById('history-controls-bar');

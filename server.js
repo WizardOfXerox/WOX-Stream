@@ -150,7 +150,7 @@ const server = http.createServer({
   }
 
   // SPA Fallback Routes — serve index.html for client-side routes
-  const SPA_ROUTES = ['/title/', '/watch/', '/search', '/collection', '/history', '/profile'];
+  const SPA_ROUTES = ['/title/', '/watch/', '/search', '/collection', '/reminders', '/account', '/history', '/profile'];
   const isSpaRoute = SPA_ROUTES.some(r => pathname === r || pathname.startsWith(r));
   if (isSpaRoute) {
     const indexPath = path.join(PUBLIC_DIR, 'index.html');

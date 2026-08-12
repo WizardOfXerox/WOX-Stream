@@ -15,7 +15,9 @@
     { "src": "/title/(.*)", "dest": "/public/index.html" },
     { "src": "/watch/(.*)", "dest": "/public/index.html" },
     { "src": "/search", "dest": "/public/index.html" },
+    { "src": "/reminders", "dest": "/public/index.html" },
     { "src": "/collection", "dest": "/public/index.html" },
+    { "src": "/account", "dest": "/public/index.html" },
     { "src": "/history", "dest": "/public/index.html" },
     { "src": "/profile", "dest": "/public/index.html" },
     {
