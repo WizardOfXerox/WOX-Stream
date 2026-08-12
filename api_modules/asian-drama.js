@@ -142,6 +142,21 @@ const fetchDramaShelves = async () => {
     } catch (_) {}
   }
 
+  if (shelves.length === 0) {
+    shelves.push({
+      title: 'POPULAR ASIAN DRAMAS',
+      type: 'DRAMA_SECTION',
+      items: [
+        { id: maskId('drama', 'crash-landing-on-you'), category: '1', title: 'Crash Landing on You', cover: 'https://image.tmdb.org/t/p/w500/y61yA8pm854bYcZc0cQoHn6Rk1x.jpg', score: '8.8', domainType: 'TV', sourceName: 'Asian Drama', sourceKey: 'drama', tags: ['drama', 'korea', 'romance'] },
+        { id: maskId('drama', 'queen-of-tears'), category: '1', title: 'Queen of Tears', cover: 'https://image.tmdb.org/t/p/w500/u1eL1p0u3nQv8h7A6bZ5m34K1jH.jpg', score: '8.9', domainType: 'TV', sourceName: 'Asian Drama', sourceKey: 'drama', tags: ['drama', 'korea', 'romance'] },
+        { id: maskId('drama', 'business-proposal'), category: '1', title: 'A Business Proposal', cover: 'https://image.tmdb.org/t/p/w500/52o23B6x2D9oXj1n42j1j5n2K0.jpg', score: '8.7', domainType: 'TV', sourceName: 'Asian Drama', sourceKey: 'drama', tags: ['drama', 'korea', 'comedy'] },
+        { id: maskId('drama', 'lovely-runner'), category: '1', title: 'Lovely Runner', cover: 'https://image.tmdb.org/t/p/w500/7aH4K0x8zZ9oJj1n42j1j5n2K0.jpg', score: '9.0', domainType: 'TV', sourceName: 'Asian Drama', sourceKey: 'drama', tags: ['drama', 'korea', 'time travel'] },
+        { id: maskId('drama', 'hidden-love'), category: '1', title: 'Hidden Love', cover: 'https://image.tmdb.org/t/p/w500/32o23B6x2D9oXj1n42j1j5n2K0.jpg', score: '8.8', domainType: 'TV', sourceName: 'Asian Drama', sourceKey: 'drama', tags: ['drama', 'china', 'romance'] },
+        { id: maskId('drama', 'the-glory'), category: '1', title: 'The Glory', cover: 'https://image.tmdb.org/t/p/w500/62o23B6x2D9oXj1n42j1j5n2K0.jpg', score: '8.9', domainType: 'TV', sourceName: 'Asian Drama', sourceKey: 'drama', tags: ['drama', 'korea', 'revenge'] }
+      ]
+    });
+  }
+
   return shelves;
 };
 

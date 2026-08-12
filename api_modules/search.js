@@ -458,7 +458,7 @@ function filterAndSortCategoryResults(results, { params = '', area = '', categor
 
   const genreInfo = GENRE_CONFIG[category] || (category ? { name: category, terms: [category.toLowerCase()] } : null);
   const regionInfo = REGION_CONFIG[area] || (area ? { name: area, terms: [area.toLowerCase()], match: (t) => t.includes(area.toLowerCase()) } : null);
-  const typeInfo = TYPE_CONFIG[params] || null;
+  const typeInfo = (params && params.includes('MOVIE,TV,VARIETY,COMIC')) ? null : (TYPE_CONFIG[params] || null);
 
   let filtered = results.filter(item => {
     if (!item || !item.id) return false;
@@ -1025,7 +1025,8 @@ async function searchHandler(req, res) {
           tags: ['movie', 'america', 'hollywood', 'western', ...(Array.isArray(item.tags) ? item.tags : []), ...(Array.isArray(item.genres) ? item.genres : [])]
         }));
         hwItems = filterAndSortCategoryResults(hwItems, filterOpts);
-        return res.status(200).json({ success: true, results: hwItems, nextCursor: '' });
+        const hwNextCursor = (hwItems.length > 0 && pageIdx < 8) ? `hollywood_page_${pageIdx + 1}` : '';
+        return res.status(200).json({ success: true, results: hwItems, nextCursor: hwNextCursor });
 
       } else if (reqSource === 'anime') {
         let aniItems = [];
@@ -1040,7 +1041,8 @@ async function searchHandler(req, res) {
           tags: ['anime', 'japan', 'animation', ...(Array.isArray(item.tags) ? item.tags : []), ...(Array.isArray(item.genres) ? item.genres : [])]
         }));
         aniItems = filterAndSortCategoryResults(aniItems, filterOpts);
-        return res.status(200).json({ success: true, results: aniItems, nextCursor: '' });
+        const aniNextCursor = (aniItems.length > 0 && pageIdx < 8) ? `anime_page_${pageIdx + 1}` : '';
+        return res.status(200).json({ success: true, results: aniItems, nextCursor: aniNextCursor });
 
       } else if (reqSource === 'drama') {
         let dramaItems = [];
@@ -1055,7 +1057,8 @@ async function searchHandler(req, res) {
           tags: ['drama', 'series', 'tv', 'korea', 'china', 'japan', 'asian', ...(Array.isArray(drItem.tags) ? drItem.tags : [])]
         }));
         dramaItems = filterAndSortCategoryResults(dramaItems, filterOpts);
-        return res.status(200).json({ success: true, results: dramaItems, nextCursor: '' });
+        const dramaNextCursor = (dramaItems.length > 0 && pageIdx < 8) ? `drama_page_${pageIdx + 1}` : '';
+        return res.status(200).json({ success: true, results: dramaItems, nextCursor: dramaNextCursor });
 
       } else if (reqSource === 'classics') {
         let classicsItems = [];
@@ -1149,6 +1152,21 @@ async function searchHandler(req, res) {
           rawResults.push(...r.value);
         }
       });
+
+      if (rawResults.length === 0) {
+        try {
+          const headers = getLoklokHeaders();
+          const defaultKw = genreName || areaName || 'movie';
+          const fallbackRes = await loklokFetch('/search/v1/searchWithKeyWord', {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ searchKeyWord: defaultKw, size: 48, sort: '', searchType: '' })
+          });
+          if (fallbackRes && fallbackRes.data && Array.isArray(fallbackRes.data.searchResults)) {
+            rawResults.push(...fallbackRes.data.searchResults);
+          }
+        } catch (_) {}
+      }
 
       let loklokItems = rawResults.map(item => {
         const itemDomain = item.domainType === 0 ? 'MOVIE' : (item.domainType === 1 ? 'TV' : String(item.domainType || '1'));
