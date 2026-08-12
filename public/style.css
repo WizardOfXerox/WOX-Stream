@@ -1732,13 +1732,30 @@ input[type="search"]::-webkit-search-results-decoration {
   }
 
   .top-navbar {
-    padding: 0.5rem 0.75rem !important;
-    gap: 0.5rem !important;
+    padding: 0.4rem 0.5rem !important;
+    gap: 0.35rem !important;
   }
 
   .search-container {
-    flex: 1 !important;
+    flex: 1 1 auto !important;
+    min-width: 100px !important;
     max-width: 100% !important;
+  }
+
+  .search-input {
+    font-size: 0.78rem !important;
+    padding: 0.4rem 0.5rem 0.4rem 2rem !important;
+  }
+
+  #btn-surprise-me span,
+  .surprise-btn-text {
+    display: none !important;
+  }
+
+  #nav-btn-login, #nav-btn-user {
+    padding: 0.4rem 0.65rem !important;
+    font-size: 0.72rem !important;
+    letter-spacing: 0.2px !important;
   }
 
   .mobile-bottom-nav {
@@ -1835,19 +1852,16 @@ input[type="search"]::-webkit-search-results-decoration {
     flex-wrap: nowrap !important;
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch !important;
-    scrollbar-width: thin !important;
-    scrollbar-color: var(--neon-cyan) transparent !important;
-    gap: 0.35rem !important;
-    padding-bottom: 0.35rem !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    gap: 0.4rem !important;
+    padding-bottom: 0.2rem !important;
   }
 
   .filter-pills::-webkit-scrollbar {
-    height: 3px !important;
-  }
-
-  .filter-pills::-webkit-scrollbar-thumb {
-    background: var(--neon-cyan) !important;
-    border-radius: 3px !important;
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }
 
   .filter-pill {
@@ -1856,6 +1870,50 @@ input[type="search"]::-webkit-search-results-decoration {
     flex: 0 0 auto !important;
     white-space: nowrap !important;
     border-radius: 6px !important;
+  }
+
+  /* Profile Sub-Nav Tabs Mobile Horizontal Scroll */
+  #history-subnav {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    gap: 0.4rem !important;
+    padding-bottom: 0.35rem !important;
+    margin-bottom: 0.75rem !important;
+    width: 100% !important;
+  }
+
+  #history-subnav::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  .history-subnav-btn {
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+    font-size: 0.75rem !important;
+    padding: 0.4rem 0.75rem !important;
+  }
+
+  #history-db-controls {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.4rem !important;
+    width: 100% !important;
+    margin-bottom: 0.75rem !important;
+  }
+
+  #history-db-controls .btn-appointment,
+  #history-db-controls button {
+    flex: 1 1 auto !important;
+    font-size: 0.72rem !important;
+    padding: 0.4rem 0.65rem !important;
+    text-align: center !important;
+    justify-content: center !important;
   }
 
   #collapse-btn {
@@ -2041,19 +2099,15 @@ input[type="search"]::-webkit-search-results-decoration {
     -webkit-overflow-scrolling: touch !important;
     padding-bottom: 0.85rem !important;
     gap: 0.75rem !important;
-    scrollbar-width: thin;
-    scrollbar-color: var(--neon-cyan) transparent;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
   }
 
   #view-home .shelf-container .card-grid::-webkit-scrollbar,
   .shelf-container .card-grid::-webkit-scrollbar {
-    height: 4px;
-  }
-
-  #view-home .shelf-container .card-grid::-webkit-scrollbar-thumb,
-  .shelf-container .card-grid::-webkit-scrollbar-thumb {
-    background: var(--neon-cyan);
-    border-radius: 4px;
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }
 
   #view-home .shelf-container .card-grid .loklok-card,
@@ -2675,12 +2729,35 @@ input[type="search"]::-webkit-search-results-decoration {
   }
 
   .top-navbar {
-    padding: 0.4rem 0.5rem !important;
-    gap: 0.4rem !important;
+    padding: 0.35rem 0.45rem !important;
+    gap: 0.3rem !important;
+  }
+
+  .search-container {
+    flex: 1 1 auto !important;
+    min-width: 110px !important;
   }
 
   .search-input {
-    font-size: 0.82rem !important;
+    font-size: 0.76rem !important;
+    padding: 0.38rem 0.4rem 0.38rem 1.85rem !important;
+  }
+
+  #btn-surprise-me, #btn-info, #btn-settings {
+    padding: 0.35rem !important;
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  #nav-btn-login, #nav-btn-user {
+    padding: 0.35rem 0.55rem !important;
+    font-size: 0.7rem !important;
+    height: 32px !important;
+    white-space: nowrap !important;
   }
 
   .shelf-title {
