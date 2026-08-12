@@ -284,14 +284,6 @@ function updateAdultPillVisibility() {
   adultPill.style.display = blockPorno ? 'none' : 'inline-block';
 }
 
-window.openLoginModal = function() {
-  const modal = document.getElementById('modal-login');
-  if (modal) {
-    modal.classList.add('active');
-    initQrCodeLogin();
-  }
-};
-
 window.openSettingsModal = function() {
   const modal = document.getElementById('modal-settings');
   if (modal) modal.classList.add('active');
@@ -1914,22 +1906,6 @@ window.toggleQualityDropdown = function(e) {
   }
 };
 
-window.toggleVolBoostDropdown = function(e) {
-  if (e) e.stopPropagation();
-  const boostBar = document.getElementById('player-landscape-boost-bar');
-  const qualBar = document.getElementById('player-landscape-quality-bar');
-  const drawer = document.getElementById('player-episodes-drawer');
-  const subModal = document.getElementById('player-sub-modal');
-  if (qualBar) qualBar.style.display = 'none';
-  if (drawer) drawer.style.display = 'none';
-  if (subModal) subModal.style.display = 'none';
-
-  if (boostBar) {
-    const isHidden = window.getComputedStyle(boostBar).display === 'none' || boostBar.style.display === 'none';
-    boostBar.style.display = isHidden ? 'block' : 'none';
-  }
-};
-
 window.playEpisodeFromDrawer = function(epId) {
   const drawer = document.getElementById('player-episodes-drawer');
   if (drawer) drawer.style.display = 'none';
@@ -2725,15 +2701,6 @@ window.toggleAppointment = async function(event, itemJsonStr) {
 
   if (state.activeNav === 'history' && state.activeProfileTab === 'appointment') {
     switchProfileTab('appointment');
-  }
-};
-
-window.handleChangePassword = function() {
-  const newPass = prompt('Enter your new account password:');
-  if (newPass && newPass.trim().length >= 6) {
-    showToast('Password updated successfully!');
-  } else if (newPass !== null) {
-    alert('Password must be at least 6 characters.');
   }
 };
 
@@ -3598,19 +3565,6 @@ window.formatSeconds = function(secs) {
     return `${h}:${mStr}:${sStr}`;
   }
   return `${m}:${sStr}`;
-};
-
-window.showToast = function(msg) {
-  let toast = document.getElementById('loklok-toast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.id = 'loklok-toast';
-    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#9333ea;color:#fff;padding:12px 20px;border-radius:10px;font-weight:600;font-size:0.9rem;z-index:99999;box-shadow:0 10px 25px rgba(0,0,0,0.5);transition:all 0.3s ease;';
-    document.body.appendChild(toast);
-  }
-  toast.innerText = msg;
-  toast.style.opacity = '1';
-  setTimeout(() => { toast.style.opacity = '0'; }, 3000);
 };
 
 window.handleImgError = function(img) {
@@ -5385,100 +5339,49 @@ window.loadWatchlist = function() {
   grid.innerHTML = collection.map(item => renderLoklokCard(item)).join('');
 };
 
-// Global Keyboard Shortcuts for Video Player
-document.addEventListener('keydown', (e) => {
-  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
-
-  const playerModal = document.getElementById('modal-player');
-  if (!playerModal || !playerModal.classList.contains('active')) return;
-
-  const plyr = state.plyrPlayer;
-
-  switch (e.code) {
-    case 'Space':
-    case 'KeyK':
-      e.preventDefault();
-      if (plyr) plyr.togglePlay();
-      break;
-    case 'ArrowLeft':
-    case 'KeyJ':
-      e.preventDefault();
-      if (plyr) plyr.rewind(10);
-      break;
-    case 'ArrowRight':
-    case 'KeyL':
-      e.preventDefault();
-      if (plyr) plyr.forward(10);
-      break;
-    case 'KeyN':
-      e.preventDefault();
-      window.playNextEpisode();
-      break;
-    case 'KeyP':
-      e.preventDefault();
-      window.playPrevEpisode();
-      break;
-    case 'KeyF':
-      e.preventDefault();
-      if (plyr) plyr.toggleFullscreen();
-      break;
+window.setPlayerMasterVolume = function(val) {
+  const video = document.querySelector('#theater-video-mount video') || document.querySelector('#plyr-video-mount video') || document.querySelector('#player-container video');
+  if (video) {
+    video.volume = Math.max(0, Math.min(1, parseFloat(val) || 1));
+    const label = document.getElementById('master-vol-val');
+    if (label) label.innerText = `${Math.round(video.volume * 100)}%`;
   }
-});
+};
 
-function initMovieLinkRouter() {
+window.skipPlayerIntro = function(seconds = 90) {
+  const video = document.querySelector('#theater-video-mount video') || document.querySelector('#plyr-video-mount video') || document.querySelector('#player-container video');
+  if (video) {
+    video.currentTime = Math.min(video.duration || 0, video.currentTime + (seconds || 90));
+    showToast(`⏩ Skipped intro (+${seconds || 90}s)`);
+  }
+};
+
+window.togglePictureInPicture = async function() {
+  const video = document.querySelector('#theater-video-mount video') || document.querySelector('#plyr-video-mount video') || document.querySelector('#player-container video');
+  if (!video) return;
+  try {
+    if (document.pictureInPictureElement) {
+      await document.exitPictureInPicture();
+      showToast('Exited Picture-in-Picture mode');
+    } else if (document.pictureInPictureEnabled) {
+      await video.requestPictureInPicture();
+      showToast('🖼️ Entered Picture-in-Picture mode');
+    } else {
+      showToast('Picture-in-Picture not supported by your browser.');
+    }
+  } catch (err) {
+    showToast('PiP error: ' + err.message);
+  }
+};
+
+// Stream Party URL auto-join check
+(function checkPartyUrl() {
   const urlParams = new URLSearchParams(window.location.search);
-  const playId = urlParams.get('play') || urlParams.get('id');
-  const cat = urlParams.get('cat') || urlParams.get('category') || 1;
-  const targetView = urlParams.get('view');
-  const urlSourceVal = urlParams.get('source');
-  const urlParamsVal = urlParams.get('params');
-  const urlAreaVal = urlParams.get('area');
-  const urlCategoryVal = urlParams.get('category');
-
-  const searchQuery = urlParams.get('q') || urlParams.get('keyword');
-
-  if (targetView && ['category', 'history', 'calendar', 'search', 'watchlist', 'home'].includes(targetView)) {
-    if (targetView === 'category') {
-      if (urlSourceVal !== null) {
-        state.filters.sourceFilter = urlSourceVal;
-        updatePillState('pills-source', urlSourceVal);
-      }
-      if (urlParamsVal !== null) {
-        state.filters.params = urlParamsVal;
-        updatePillState('pills-type', urlParamsVal);
-      }
-      if (urlAreaVal !== null) {
-        state.filters.area = urlAreaVal;
-        updatePillState('pills-region', urlAreaVal);
-      }
-      if (urlCategoryVal !== null) {
-        state.filters.category = urlCategoryVal;
-        updatePillState('pills-genre', urlCategoryVal);
-      }
-    }
-    switchNav(targetView, false);
-    if (targetView === 'search' && searchQuery) {
-      const searchInput = document.getElementById('search-input');
-      if (searchInput) searchInput.value = searchQuery;
-      performSearch(searchQuery);
-    }
-  } else if (searchQuery) {
-    const searchInput = document.getElementById('search-input');
-    if (searchInput) searchInput.value = searchQuery;
-    performSearch(searchQuery);
-  } else {
-    loadHomeFeed();
-  }
-
   const partyCode = urlParams.get('party') || urlParams.get('room') || urlParams.get('code');
-  if (partyCode) {
+  if (partyCode && typeof joinStreamPartyRoom === 'function') {
     joinStreamPartyRoom(partyCode.toUpperCase());
   }
-
-  if (playId) {
-    openDetailModal(playId, cat);
-  }
-}
+})();
 
 state.party = {
   active: false,
