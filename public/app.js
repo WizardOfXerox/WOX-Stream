@@ -2734,17 +2734,20 @@ window.switchProfileTab = async function(tabName, updateUrl = true) {
 
   const historyGrid = document.getElementById('history-grid');
   const historyControls = document.getElementById('history-controls-bar');
+  const historyDbControls = document.getElementById('history-db-controls');
   const profileSubContent = document.getElementById('profile-sub-content');
 
   if (tabName === 'history') {
-    if (historyGrid) historyGrid.style.display = 'grid';
-    if (historyControls) historyControls.style.display = 'flex';
-    if (profileSubContent) profileSubContent.style.display = 'none';
+    if (historyGrid) historyGrid.style.setProperty('display', 'grid', 'important');
+    if (historyControls) historyControls.style.setProperty('display', 'flex', 'important');
+    if (historyDbControls) historyDbControls.style.setProperty('display', 'flex', 'important');
+    if (profileSubContent) profileSubContent.style.setProperty('display', 'none', 'important');
     loadHistory(true);
   } else {
-    if (historyGrid) historyGrid.style.display = 'none';
-    if (historyControls) historyControls.style.display = 'none';
-    if (profileSubContent) profileSubContent.style.display = 'block';
+    if (historyGrid) historyGrid.style.setProperty('display', 'none', 'important');
+    if (historyControls) historyControls.style.setProperty('display', 'none', 'important');
+    if (historyDbControls) historyDbControls.style.setProperty('display', 'none', 'important');
+    if (profileSubContent) profileSubContent.style.setProperty('display', 'block', 'important');
 
     if (tabName === 'appointment') {
       profileSubContent.innerHTML = '<div class="spinner"></div>';
@@ -3269,6 +3272,13 @@ window.renderHistoryView = function() {
   const grid = document.getElementById('history-grid');
   if (!grid) return;
 
+  if (state.activeProfileTab && state.activeProfileTab !== 'history') {
+    grid.style.setProperty('display', 'none', 'important');
+    return;
+  } else {
+    grid.style.setProperty('display', 'grid');
+  }
+
   const rawHistory = JSON.parse(localStorage.getItem('loklok_watch_history') || '[]');
   const deletedSet = new Set(JSON.parse(localStorage.getItem('loklok_deleted_history') || '[]'));
 
@@ -3427,10 +3437,15 @@ window.renderHistoryView = function() {
 };
 
 window.loadHistory = async function(quiet = false) {
+  const grid = document.getElementById('history-grid');
+  if (grid && state.activeProfileTab && state.activeProfileTab !== 'history') {
+    grid.style.display = 'none';
+    return;
+  }
+
   console.group('%c📺 [Loklok Debug] Quietly Syncing Watch History...', 'color: #c084fc; font-weight: bold; font-size: 1.1rem;');
   console.log('🔑 Active User Token:', state.token ? (state.token.substring(0, 20) + '...') : 'None (Guest Mode)');
   
-  const grid = document.getElementById('history-grid');
   if (grid && !quiet && (!grid.children || grid.children.length === 0)) {
     grid.innerHTML = '<div class="spinner"></div>';
   }

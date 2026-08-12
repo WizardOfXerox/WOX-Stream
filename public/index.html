@@ -476,7 +476,7 @@
             </div>
 
             <!-- Import / Export / Purge Database Buttons -->
-            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <div id="history-db-controls" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
               <input type="file" id="db-file-input" accept=".db,.sqlite,.json" style="display: none;" onchange="handleDbFileImport(event)">
               <button class="btn btn-glass" onclick="document.getElementById('db-file-input').click()" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; border-color: rgba(56,189,248,0.4); color: #38bdf8;" title="Import rrclient.db from computer or JSON backup">
                 📥 Import rrclient.db
