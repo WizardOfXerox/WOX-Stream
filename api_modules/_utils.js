@@ -430,8 +430,10 @@ function hashPassword(password, salt) {
 }
 
 function verifyPassword(password, storedSalt, storedHash) {
-  if (!storedSalt || !storedHash) {
-    // Legacy fallback for plain SHA256 hashes created during initial dev testing
+  if (!password || typeof password !== 'string') return false;
+  if (!storedHash || typeof storedHash !== 'string') return false;
+
+  if (!storedSalt) {
     const legacyHash = crypto.createHash('sha256').update(password).digest('hex');
     return legacyHash === storedHash;
   }
@@ -439,7 +441,7 @@ function verifyPassword(password, storedSalt, storedHash) {
     const { hash } = hashPassword(password, storedSalt);
     const hashBuf = Buffer.from(hash, 'hex');
     const storedBuf = Buffer.from(storedHash, 'hex');
-    if (hashBuf.length !== storedBuf.length) return false;
+    if (hashBuf.length === 0 || hashBuf.length !== storedBuf.length) return false;
     return crypto.timingSafeEqual(hashBuf, storedBuf);
   } catch (_) {
     return false;

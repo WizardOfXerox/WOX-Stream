@@ -1315,6 +1315,40 @@
         <button type="button" class="btn btn-primary" onclick="closeModal('modal-dmca')" style="width: 100%; justify-content: center; background: #fbbf24; color: #000; font-weight: 800; border: none; font-family: 'Orbitron', sans-serif; height: 44px; letter-spacing: 1px;">I UNDERSTAND & ACKNOWLEDGE</button>
       </div>
     </div>
+  <!-- Change Password Modal -->
+  <div class="modal-backdrop" id="modal-change-password" style="z-index: 10007;">
+    <div class="modal-container" style="max-width: 440px; margin: auto; border: 1px solid var(--accent-cyan);">
+      <button class="modal-close" onclick="closeModal('modal-change-password')">&times;</button>
+      <div class="modal-body" style="padding: 2rem 1.75rem;">
+        <h2 style="font-family: 'Orbitron', sans-serif; color: var(--accent-cyan); font-size: 1.3rem; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem;">
+          🔒 CHANGE PASSWORD
+        </h2>
+
+        <div id="change-pass-error-msg" style="display: none; background: rgba(244, 63, 94, 0.15); border: 1px solid #f43f5e; color: #f43f5e; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.85rem; margin-bottom: 1.25rem; font-weight: 600;"></div>
+
+        <form id="form-change-password" onsubmit="submitChangePassword(event)" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div>
+            <label style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem;">Current Password</label>
+            <input type="password" id="input-old-password" required placeholder="Enter current password" style="width: 100%; padding: 0.65rem 0.85rem; background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 0.9rem; outline: none;" onfocus="this.style.borderColor='var(--accent-cyan)'" onblur="this.style.borderColor='var(--border-glass)'">
+          </div>
+
+          <div>
+            <label style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem;">New Password (min 6 characters)</label>
+            <input type="password" id="input-new-password" required minlength="6" placeholder="Enter new password" style="width: 100%; padding: 0.65rem 0.85rem; background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 0.9rem; outline: none;" onfocus="this.style.borderColor='var(--accent-cyan)'" onblur="this.style.borderColor='var(--border-glass)'">
+          </div>
+
+          <div>
+            <label style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem;">Confirm New Password</label>
+            <input type="password" id="input-confirm-password" required minlength="6" placeholder="Confirm new password" style="width: 100%; padding: 0.65rem 0.85rem; background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 0.9rem; outline: none;" onfocus="this.style.borderColor='var(--accent-cyan)'" onblur="this.style.borderColor='var(--border-glass)'">
+          </div>
+
+          <div style="display: flex; gap: 0.75rem; margin-top: 0.5rem;">
+            <button type="button" class="btn btn-glass" onclick="closeModal('modal-change-password')" style="flex: 1;">Cancel</button>
+            <button type="submit" id="btn-save-password" class="btn btn-primary" style="flex: 1; justify-content: center; font-weight: 700;">Update Password</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 
 </body>

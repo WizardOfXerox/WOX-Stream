@@ -210,17 +210,21 @@ module.exports = async (req, res) => {
       const tokenStr = req.headers.token || req.query.token || req.body?.token || '';
       const payload = parseToken(tokenStr);
       if (!payload || !payload.userId) {
-        return res.status(401).json({ success: false, error: 'Unauthorized' });
+        return res.status(401).json({ success: false, error: 'Unauthorized. Please sign in again.' });
       }
 
       const { oldPassword, newPassword } = req.body || {};
-      if (!oldPassword || !newPassword) {
-        return res.status(400).json({ success: false, error: 'Old password and new password are required.' });
+      if (!oldPassword || typeof oldPassword !== 'string' || !oldPassword.trim()) {
+        return res.status(400).json({ success: false, error: 'Current password is required.' });
       }
-      if (newPassword.length < 6) {
-        return res.status(400).json({ success: false, error: 'New password must be at least 6 characters.' });
+      if (!newPassword || typeof newPassword !== 'string' || newPassword.trim().length < 6) {
+        return res.status(400).json({ success: false, error: 'New password must be at least 6 characters long.' });
+      }
+      if (oldPassword.trim() === newPassword.trim()) {
+        return res.status(400).json({ success: false, error: 'New password must be different from current password.' });
       }
 
+      const db = readDb();
       let user = null;
       if (isNeon) {
         const rows = await sql`SELECT * FROM wox_users WHERE id = ${payload.userId} LIMIT 1`;
@@ -229,19 +233,24 @@ module.exports = async (req, res) => {
           user = { id: r.id, username: r.username, email: r.email, salt: r.salt, passwordHash: r.password_hash, avatar: r.avatar };
         }
       } else {
-        user = db.users.find(u => u.id === payload.userId);
+        user = (db.users || []).find(u => String(u.id) === String(payload.userId));
       }
 
-      if (!user || !verifyPassword(oldPassword, user.salt || '', user.passwordHash || '')) {
-        return res.status(401).json({ success: false, error: 'Current password is incorrect.' });
+      if (!user) {
+        return res.status(404).json({ success: false, error: 'User account not found or session expired.' });
       }
 
-      const { salt: newSalt, hash: newHash } = hashPassword(newPassword);
+      const isOldPasswordValid = verifyPassword(oldPassword.trim(), user.salt || '', user.passwordHash || '');
+      if (!isOldPasswordValid) {
+        return res.status(401).json({ success: false, error: 'Current password is incorrect. Please double check and try again.' });
+      }
+
+      const { salt: newSalt, hash: newHash } = hashPassword(newPassword.trim());
 
       if (isNeon) {
         await sql`UPDATE wox_users SET salt = ${newSalt}, password_hash = ${newHash} WHERE id = ${payload.userId}`;
       } else {
-        const idx = db.users.findIndex(u => u.id === payload.userId);
+        const idx = db.users.findIndex(u => String(u.id) === String(payload.userId));
         if (idx >= 0) {
           db.users[idx].salt = newSalt;
           db.users[idx].passwordHash = newHash;

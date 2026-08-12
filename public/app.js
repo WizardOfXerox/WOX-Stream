@@ -2858,9 +2858,12 @@ window.switchProfileTab = async function(tabName, updateUrl = true) {
       }
 
     } else if (tabName === 'account') {
+      const isLoggedIn = !!state.token;
       const u = state.user || {};
-      const nickName = u.username || u.nickName || u.name || 'Guest User';
-      const email = u.email || 'Unregistered Guest Session';
+      const nickName = isLoggedIn ? (u.username || u.nickName || u.name || 'WOX User') : 'Guest User';
+      const email = isLoggedIn ? (u.email || 'Registered User') : 'Unregistered Guest Session';
+      const fallbackAvatar = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'><circle cx='32' cy='32' r='32' fill='%2338bdf8'/><path d='M32 16a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 24c-12 0-20 6-20 12v2h40v-2c0-6-8-12-20-12z' fill='%23ffffff'/></svg>`;
+      const avatarSrc = (isLoggedIn && (u.avatar || u.portrait)) ? (u.avatar || u.portrait) : fallbackAvatar;
 
       const localHistory = JSON.parse(localStorage.getItem('loklok_watch_history') || '[]');
       const totalWatched = localHistory.length;
@@ -2891,16 +2894,21 @@ window.switchProfileTab = async function(tabName, updateUrl = true) {
           <!-- Account Details Form Card -->
           <div style="grid-column:1/-1;background:var(--bg-card);border:1px solid var(--border-glass);border-radius:16px;padding:2rem;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem;">
-              <h3 style="font-size:1.25rem;font-weight:700;color:#fff;margin:0;">Account & Profile Settings</h3>
-              ${state.token ? `<button onclick="handleDeleteAccount()" style="background:rgba(244,63,94,0.12);border:1px solid rgba(244,63,94,0.4);color:#f43f5e;padding:0.4rem 0.85rem;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;">⚠️ Delete Account</button>` : ''}
+              <div>
+                <h3 style="font-size:1.25rem;font-weight:700;color:#fff;margin:0;">Account & Profile Settings</h3>
+                <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.25rem;">
+                  ${isLoggedIn ? '<span style="color:#34d399;font-weight:600;">✓ Cloud Account Active</span>' : '<span style="color:#fbbf24;font-weight:600;">⚡ Guest Session (Local Data Only)</span>'}
+                </div>
+              </div>
+              ${isLoggedIn ? `<button onclick="handleDeleteAccount()" style="background:rgba(244,63,94,0.12);border:1px solid rgba(244,63,94,0.4);color:#f43f5e;padding:0.4rem 0.85rem;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;">⚠️ Delete Account</button>` : `<button onclick="openLoginModal()" class="btn btn-primary" style="font-size:0.85rem;padding:0.45rem 1rem;">🔑 Sign In / Register</button>`}
             </div>
 
             <!-- Avatar Row -->
             <div style="margin-bottom:1.25rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-glass);padding-bottom:1rem;">
               <span style="color:var(--text-muted);font-size:0.95rem;">Profile Avatar</span>
               <div style="display:flex;align-items:center;gap:0.85rem;">
-                <img src="${u.avatar || u.portrait || SVG_FALLBACK}" alt="Avatar" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--neon-cyan);">
-                <button onclick="handleUploadAvatar()" style="background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.3);color:#38bdf8;padding:0.3rem 0.75rem;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;">Change Avatar</button>
+                <img src="${avatarSrc}" alt="Avatar" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid var(--neon-cyan);box-shadow:0 0 10px rgba(0,255,255,0.3);" onerror="handleAvatarError(this)">
+                ${isLoggedIn ? `<button onclick="handleUploadAvatar()" style="background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.3);color:#38bdf8;padding:0.3rem 0.75rem;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;">Change Avatar</button>` : ''}
               </div>
             </div>
             
@@ -2914,41 +2922,84 @@ window.switchProfileTab = async function(tabName, updateUrl = true) {
               <span style="color:var(--text-dim);font-size:0.95rem;">${escapeHtml(email)}</span>
             </div>
 
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <span style="color:var(--text-muted);font-size:0.95rem;">Password</span>
-              <div style="display:flex;align-items:center;gap:1rem;">
-                <span style="color:var(--text-dim);font-size:0.95rem;">••••••••</span>
-                <button onclick="handleChangePassword()" style="background:none;border:none;color:var(--accent-cyan);font-weight:600;font-size:0.85rem;cursor:pointer;">Change Password</button>
+            ${isLoggedIn ? `
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:var(--text-muted);font-size:0.95rem;">Password</span>
+                <div style="display:flex;align-items:center;gap:1rem;">
+                  <span style="color:var(--text-dim);font-size:0.95rem;">••••••••</span>
+                  <button onclick="handleChangePassword()" style="background:none;border:none;color:var(--accent-cyan);font-weight:600;font-size:0.85rem;cursor:pointer;">Change Password</button>
+                </div>
               </div>
-            </div>
+            ` : `
+              <div style="background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.25);border-radius:12px;padding:1.25rem;margin-top:1rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+                <div>
+                  <div style="font-weight:700;color:#38bdf8;font-size:0.95rem;">💡 Unlock Cloud Sync & Features</div>
+                  <div style="font-size:0.85rem;color:var(--text-muted);margin-top:0.25rem;">Sign in or register a free account to set a password, upload custom avatars, and sync watch history across all devices.</div>
+                </div>
+                <button onclick="openLoginModal()" class="btn btn-primary" style="font-size:0.82rem;padding:0.45rem 1rem;white-space:nowrap;">Sign In Now</button>
+            `}
           </div>
-
         </div>
       `;
     }
   }
 };
 
-window.handleChangePassword = async function() {
+window.handleChangePassword = function() {
   if (!state.token) {
     showToast('Please log in to change your password.');
     openModal('modal-login');
     return;
   }
-  const oldPassword = prompt('🔑 Enter your CURRENT password:');
-  if (!oldPassword) return;
-  const newPassword = prompt('🔒 Enter your NEW password (min 6 characters):');
-  if (!newPassword || newPassword.length < 6) {
-    showToast('New password must be at least 6 characters.');
+  const errEl = document.getElementById('change-pass-error-msg');
+  if (errEl) errEl.style.display = 'none';
+
+  const form = document.getElementById('form-change-password');
+  if (form) form.reset();
+
+  openModal('modal-change-password');
+};
+
+window.submitChangePassword = async function(e) {
+  if (e) e.preventDefault();
+  const errEl = document.getElementById('change-pass-error-msg');
+  const btn = document.getElementById('btn-save-password');
+  if (errEl) errEl.style.display = 'none';
+
+  const oldPassword = document.getElementById('input-old-password')?.value || '';
+  const newPassword = document.getElementById('input-new-password')?.value || '';
+  const confirmPassword = document.getElementById('input-confirm-password')?.value || '';
+
+  if (!oldPassword || !oldPassword.trim()) {
+    if (errEl) { errEl.innerText = 'Current password is required.'; errEl.style.display = 'block'; }
     return;
   }
+
+  if (!newPassword || newPassword.trim().length < 6) {
+    if (errEl) { errEl.innerText = 'New password must be at least 6 characters.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  if (oldPassword.trim() === newPassword.trim()) {
+    if (errEl) { errEl.innerText = 'New password must be different from current password.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  if (newPassword.trim() !== confirmPassword.trim()) {
+    if (errEl) { errEl.innerText = 'New passwords do not match. Please re-enter.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.innerText = 'Updating...'; }
+
   try {
     const res = await fetch('/api/auth?action=change_password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', token: state.token },
-      body: JSON.stringify({ oldPassword, newPassword })
+      body: JSON.stringify({ oldPassword: oldPassword.trim(), newPassword: newPassword.trim() })
     });
     const data = await res.json();
+
     if (data.success) {
       if (data.token) {
         state.token = data.token;
