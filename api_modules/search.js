@@ -546,7 +546,7 @@ async function searchHandler(req, res) {
 
     const cacheKey = `search_${keyword || ''}_${req.query.params || ''}_${req.query.area || ''}_${req.query.category || ''}_${req.query.source || ''}_${page || '0'}_${req.query.order || ''}_${req.query.fast || ''}`;
     const cached = searchCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp < SEARCH_CACHE_TTL)) {
+    if (cached && (Date.now() - cached.timestamp < SEARCH_CACHE_TTL) && cached.data && Array.isArray(cached.data.results) && cached.data.results.length > 0) {
       res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=180');
       return res.status(200).json(cached.data);
     }
@@ -1311,10 +1311,12 @@ async function searchHandler(req, res) {
       let nextCursor = (finalFiltered.length > 0 && pageIdx < 8) ? `page_${pageIdx + 1}` : '';
       const payload = { success: true, results: finalFiltered, nextCursor };
 
-      searchCache.set(cacheKey, { timestamp: Date.now(), data: payload });
-      if (searchCache.size > 150) {
-        const oldestKey = searchCache.keys().next().value;
-        searchCache.delete(oldestKey);
+      if (finalFiltered.length > 0) {
+        searchCache.set(cacheKey, { timestamp: Date.now(), data: payload });
+        if (searchCache.size > 150) {
+          const oldestKey = searchCache.keys().next().value;
+          searchCache.delete(oldestKey);
+        }
       }
 
       res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=180');
