@@ -3918,9 +3918,24 @@ window.switchNav = function(viewName, pushUrl = true) {
     try { loadHistory(true); } catch (_) {}
   }
 
-  // Close search dropdown on any navigation
+  // Close search dropdown and clear inputs on home navigation
   const dropdown = document.getElementById('search-suggestions-dropdown');
   if (dropdown) dropdown.style.display = 'none';
+
+  if (viewName === 'home') {
+    const topInput = document.getElementById('search-input');
+    if (topInput) topInput.value = '';
+    const topClear = document.getElementById('search-clear-btn');
+    if (topClear) topClear.style.display = 'none';
+
+    const catInput = document.getElementById('category-search-input');
+    if (catInput) catInput.value = '';
+    const catClear = document.getElementById('btn-clear-category-search');
+    if (catClear) catClear.style.display = 'none';
+
+    // Reset category filter state
+    state.filters = { page: 0, params: '', area: '', category: '', order: 'count', cursor: '', hasMore: true, loadingMore: false, seenIds: new Set(), sourceFilter: '' };
+  }
 
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   const activeItem = document.getElementById(`nav-${viewName}`);
