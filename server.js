@@ -1,6 +1,8 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { applySecurityHeaders } = require('./api_modules/_security');
+const { isBotBlocked } = require('./api_modules/_rateLimiter');
 
 if (fs.existsSync(path.join(__dirname, '.env'))) {
   const envContent = fs.readFileSync(path.join(__dirname, '.env'), 'utf-8');
@@ -78,6 +80,9 @@ const server = http.createServer({
     return res;
   };
 
+  // Apply security headers to all responses
+  applySecurityHeaders(res);
+
   function getHandler(modName) {
     const modPath = path.join(__dirname, 'api_modules', modName);
     try {
@@ -138,6 +143,23 @@ const server = http.createServer({
   // Adult API Route
   if (pathname.startsWith('/api/adult')) {
     return getHandler('adult')(req, res);
+  }
+
+  if (pathname === '/sitemap.xml') {
+    return getHandler('sitemap')(req, res);
+  }
+
+  // SPA Fallback Routes — serve index.html for client-side routes
+  const SPA_ROUTES = ['/title/', '/watch/', '/search', '/collection', '/history', '/profile'];
+  const isSpaRoute = SPA_ROUTES.some(r => pathname === r || pathname.startsWith(r));
+  if (isSpaRoute) {
+    const indexPath = path.join(PUBLIC_DIR, 'index.html');
+    return fs.readFile(indexPath, (err, data) => {
+      if (err) { res.statusCode = 500; return res.end('Internal Error'); }
+      res.setHeader('Content-Type', 'text/html');
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+      res.end(data);
+    });
   }
 
   // Static File Serving

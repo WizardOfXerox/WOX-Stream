@@ -386,7 +386,9 @@ module.exports = async (req, res) => {
       fileSize = qualities[0].size || fileSize;
     }
 
-    const proxiedStreamUrl = `/api/stream?url=${encodeURIComponent(rawStreamUrl)}`;
+    const { generateStreamToken } = require('./_rateLimiter');
+    const { token: stoken, exp: sexp } = generateStreamToken(rawStreamUrl);
+    const proxiedStreamUrl = `/api/stream?url=${encodeURIComponent(rawStreamUrl)}&stoken=${stoken}&exp=${sexp}`;
 
     return res.status(200).json({
       success: true,

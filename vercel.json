@@ -11,6 +11,13 @@
       "src": "/api/(.*)",
       "dest": "/api/index.js?pathname=$1"
     },
+    { "src": "/sitemap.xml", "dest": "/api/index.js?pathname=sitemap" },
+    { "src": "/title/(.*)", "dest": "/public/index.html" },
+    { "src": "/watch/(.*)", "dest": "/public/index.html" },
+    { "src": "/search", "dest": "/public/index.html" },
+    { "src": "/collection", "dest": "/public/index.html" },
+    { "src": "/history", "dest": "/public/index.html" },
+    { "src": "/profile", "dest": "/public/index.html" },
     {
       "src": "/(.*)",
       "dest": "/public/$1"

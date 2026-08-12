@@ -1,4 +1,8 @@
 const url = require('url');
+const { applySecurityHeaders } = require('../api_modules/_security');
+const { checkRateLimit, isBotBlocked } = require('../api_modules/_rateLimiter');
+let handleSsrMeta = null;
+try { handleSsrMeta = require('../api_modules/ssr-meta').handleSsrMeta; } catch (_) {}
 
 // Static registry mapping of all API handler modules for Vercel bundling
 const MODULE_REGISTRY = {
@@ -30,7 +34,8 @@ const MODULE_REGISTRY = {
   'import-db': require('../api_modules/import-db'),
   'stream-party': require('../api_modules/stream-party'),
   'cover-lookup': require('../api_modules/cover-lookup'),
-  'resolve-embed': require('../api_modules/resolve-embed')
+  'resolve-embed': require('../api_modules/resolve-embed'),
+  'sitemap': require('../api_modules/sitemap')
 };
 
 // Single Vercel Serverless Function entry point
@@ -49,6 +54,32 @@ module.exports = async (req, res) => {
   if (pathname.includes('/')) pathname = pathname.split('/')[0];
   if (pathname.includes('?')) pathname = pathname.split('?')[0];
 
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, token, wox-token');
+    return res.status(200).end();
+  }
+
+  applySecurityHeaders(res);
+
+  const { blocked, isLegitBot } = isBotBlocked(req);
+  if (blocked && !isLegitBot) {
+    res.writeHead(403, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ success: false, error: 'Forbidden' }));
+  }
+
+  let rateLimitGroup = 'metadata';
+  if (['stream', 'convert-mp4'].includes(pathname)) {
+    rateLimitGroup = 'stream';
+  } else if (['episode', 'subtitle', 'hstream', 'hentaimama', 'adult'].includes(pathname)) {
+    rateLimitGroup = 'episode';
+  }
+
+  if (!checkRateLimit(req, res, rateLimitGroup)) {
+    return;
+  }
+
   const handler = MODULE_REGISTRY[pathname];
   if (handler) {
     try {
@@ -56,10 +87,12 @@ module.exports = async (req, res) => {
     } catch (err) {
       console.error(`Execution Error for [/api/${pathname}]:`, err.stack || err.message);
       res.setHeader('Access-Control-Allow-Origin', '*');
-      return res.status(500).json({ success: false, error: err.message });
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ success: false, error: err.message }));
     }
   }
 
   res.setHeader('Access-Control-Allow-Origin', '*');
-  return res.status(404).json({ success: false, error: `API Route /api/${pathname} not found` });
+  res.writeHead(404, { 'Content-Type': 'application/json' });
+  return res.end(JSON.stringify({ success: false, error: `API Route /api/${pathname} not found` }));
 };

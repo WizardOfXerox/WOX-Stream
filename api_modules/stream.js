@@ -17,6 +17,14 @@ module.exports = async (req, res) => {
       return res.status(400).end('Missing stream URL or ticket');
     }
 
+    const { validateStreamToken } = require('./_rateLimiter');
+    if (req.query.stoken && req.query.exp) {
+      const isValid = validateStreamToken(rawUrl, req.query.stoken, req.query.exp);
+      if (!isValid) {
+        return res.status(403).end('Stream Token Expired or Invalid HMAC');
+      }
+    }
+
     let targetUrlString = rawUrl;
     if (typeof targetUrlString === 'string' && (targetUrlString.startsWith('http%3A') || targetUrlString.startsWith('https%3A') || targetUrlString.startsWith('http%253A') || targetUrlString.startsWith('https%253A'))) {
       try { targetUrlString = decodeURIComponent(targetUrlString); } catch (_) {}

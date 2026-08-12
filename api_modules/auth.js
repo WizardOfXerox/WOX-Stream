@@ -205,6 +205,147 @@ module.exports = async (req, res) => {
       }
     }
 
+    // 5. CHANGE PASSWORD
+    if (action === 'change_password') {
+      const tokenStr = req.headers.token || req.query.token || req.body?.token || '';
+      const payload = parseToken(tokenStr);
+      if (!payload || !payload.userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { oldPassword, newPassword } = req.body || {};
+      if (!oldPassword || !newPassword) {
+        return res.status(400).json({ success: false, error: 'Old password and new password are required.' });
+      }
+      if (newPassword.length < 6) {
+        return res.status(400).json({ success: false, error: 'New password must be at least 6 characters.' });
+      }
+
+      let user = null;
+      if (isNeon) {
+        const rows = await sql`SELECT * FROM wox_users WHERE id = ${payload.userId} LIMIT 1`;
+        if (rows.length > 0) {
+          const r = rows[0];
+          user = { id: r.id, username: r.username, email: r.email, salt: r.salt, passwordHash: r.password_hash, avatar: r.avatar };
+        }
+      } else {
+        user = db.users.find(u => u.id === payload.userId);
+      }
+
+      if (!user || !verifyPassword(oldPassword, user.salt || '', user.passwordHash || '')) {
+        return res.status(401).json({ success: false, error: 'Current password is incorrect.' });
+      }
+
+      const { salt: newSalt, hash: newHash } = hashPassword(newPassword);
+
+      if (isNeon) {
+        await sql`UPDATE wox_users SET salt = ${newSalt}, password_hash = ${newHash} WHERE id = ${payload.userId}`;
+      } else {
+        const idx = db.users.findIndex(u => u.id === payload.userId);
+        if (idx >= 0) {
+          db.users[idx].salt = newSalt;
+          db.users[idx].passwordHash = newHash;
+          writeDb(db);
+        }
+      }
+
+      const newToken = generateToken(user);
+      return res.status(200).json({
+        success: true,
+        message: 'Password changed successfully.',
+        token: newToken
+      });
+    }
+
+    // 6. DELETE ACCOUNT
+    if (action === 'delete_account') {
+      const tokenStr = req.headers.token || req.query.token || req.body?.token || '';
+      const payload = parseToken(tokenStr);
+      if (!payload || !payload.userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { password } = req.body || {};
+      if (!password) {
+        return res.status(400).json({ success: false, error: 'Password confirmation is required to delete account.' });
+      }
+
+      let user = null;
+      if (isNeon) {
+        const rows = await sql`SELECT * FROM wox_users WHERE id = ${payload.userId} LIMIT 1`;
+        if (rows.length > 0) {
+          const r = rows[0];
+          user = { id: r.id, salt: r.salt, passwordHash: r.password_hash };
+        }
+      } else {
+        user = db.users.find(u => u.id === payload.userId);
+      }
+
+      if (!user || !verifyPassword(password, user.salt || '', user.passwordHash || '')) {
+        return res.status(401).json({ success: false, error: 'Password is incorrect.' });
+      }
+
+      if (isNeon) {
+        await sql`DELETE FROM wox_history WHERE user_id = ${payload.userId}`;
+        await sql`DELETE FROM wox_collections WHERE user_id = ${payload.userId}`;
+        await sql`DELETE FROM wox_appointments WHERE user_id = ${payload.userId}`;
+        await sql`DELETE FROM wox_users WHERE id = ${payload.userId}`;
+      } else {
+        db.users = db.users.filter(u => u.id !== payload.userId);
+        db.history = (db.history || []).filter(h => h.userId !== payload.userId);
+        db.collections = (db.collections || []).filter(c => c.userId !== payload.userId);
+        db.appointments = (db.appointments || []).filter(a => a.userId !== payload.userId);
+        writeDb(db);
+      }
+
+      return res.status(200).json({ success: true, deleted: true, message: 'Account permanently deleted.' });
+    }
+
+    // 7. UPLOAD AVATAR
+    if (action === 'upload_avatar') {
+      const tokenStr = req.headers.token || req.query.token || req.body?.token || '';
+      const payload = parseToken(tokenStr);
+      if (!payload || !payload.userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { avatar } = req.body || {};
+      if (!avatar || typeof avatar !== 'string') {
+        return res.status(400).json({ success: false, error: 'Avatar URL or base64 data URI is required.' });
+      }
+
+      // Validate base64 size (< 2MB)
+      if (avatar.startsWith('data:image/')) {
+        const base64Part = avatar.split(',')[1] || '';
+        const sizeBytes = (base64Part.length * 3) / 4;
+        if (sizeBytes > 2 * 1024 * 1024) {
+          return res.status(400).json({ success: false, error: 'Avatar image must be under 2MB.' });
+        }
+      }
+
+      if (isNeon) {
+        await sql`UPDATE wox_users SET avatar = ${avatar} WHERE id = ${payload.userId}`;
+        const rows = await sql`SELECT id, username, email, avatar FROM wox_users WHERE id = ${payload.userId} LIMIT 1`;
+        const updatedUser = rows[0];
+        return res.status(200).json({
+          success: true,
+          user: { id: updatedUser.id, username: updatedUser.username, email: updatedUser.email, avatar: updatedUser.avatar, portrait: updatedUser.avatar }
+        });
+      } else {
+        const idx = db.users.findIndex(u => u.id === payload.userId);
+        if (idx >= 0) {
+          db.users[idx].avatar = avatar;
+          writeDb(db);
+          const u = db.users[idx];
+          return res.status(200).json({
+            success: true,
+            user: { id: u.id, username: u.username, email: u.email, avatar: u.avatar, portrait: u.avatar }
+          });
+        }
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+    }
+
     return res.status(200).json({
       success: false,
       error: 'Unauthenticated or guest session'

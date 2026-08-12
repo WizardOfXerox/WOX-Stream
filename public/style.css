@@ -2633,3 +2633,254 @@ input[type="search"]::-webkit-search-results-decoration {
   box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
 }
 
+/* ══════════════════════════════════════════
+   SAFE AREA INSET (iPhone X+ Notch Support)
+   ══════════════════════════════════════════ */
+.mobile-bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  height: calc(58px + env(safe-area-inset-bottom, 0px));
+}
+
+.top-navbar {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* ══════════════════════════════════════════
+   SMALL PHONES (≤480px) — iPhone SE, Galaxy A
+   ══════════════════════════════════════════ */
+@media (max-width: 480px) {
+  .card-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.5rem 0.35rem !important;
+  }
+
+  .hero-banner {
+    min-height: 180px !important;
+  }
+
+  .hero-title-text {
+    font-size: 1rem !important;
+  }
+
+  .hero-description {
+    -webkit-line-clamp: 1 !important;
+    font-size: 0.7rem !important;
+  }
+
+  .hero-buttons .btn {
+    font-size: 0.72rem !important;
+    padding: 0.4rem 0.7rem !important;
+  }
+
+  .top-navbar {
+    padding: 0.4rem 0.5rem !important;
+    gap: 0.4rem !important;
+  }
+
+  .search-input {
+    font-size: 0.82rem !important;
+  }
+
+  .shelf-title {
+    font-size: 0.82rem !important;
+    letter-spacing: 0.3px !important;
+  }
+
+  .mobile-bottom-nav {
+    height: calc(52px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .mobile-nav-item {
+    font-size: 0.55rem !important;
+    padding: 3px 6px !important;
+  }
+
+  .mobile-nav-item .nav-icon {
+    font-size: 1.1rem !important;
+  }
+
+  /* Detail modal compact */
+  .detail-cover {
+    width: 100px !important;
+    height: 150px !important;
+  }
+
+  .detail-info h2 {
+    font-size: 1rem !important;
+  }
+
+  .detail-actions button,
+  .detail-actions .btn {
+    font-size: 0.72rem !important;
+    padding: 0.4rem 0.65rem !important;
+  }
+
+  /* Category toolbar compact */
+  .category-toolbar .shelf-title {
+    font-size: 0.78rem !important;
+  }
+
+  .filter-pill {
+    font-size: 0.7rem !important;
+    padding: 0.28rem 0.55rem !important;
+  }
+
+  /* Cards in horizontal scroll shelves */
+  .loklok-card {
+    flex: 0 0 120px !important;
+    width: 120px !important;
+  }
+
+  .card-poster-wrap {
+    height: 175px !important;
+  }
+
+  .card-poster-title {
+    font-size: 0.7rem !important;
+  }
+
+  /* Content padding for bottom nav safe area */
+  .main-view,
+  #view-home,
+  #view-category,
+  #view-history {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /* Player controls smaller */
+  .psb-container {
+    width: 92vw !important;
+    max-width: none !important;
+  }
+
+  /* Search results */
+  #search-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.5rem !important;
+  }
+}
+
+/* ══════════════════════════════════════════
+   ULTRA-SMALL PHONES (≤360px) — iPhone SE 1st, Galaxy A01
+   ══════════════════════════════════════════ */
+@media (max-width: 360px) {
+  .card-grid {
+    gap: 0.4rem 0.25rem !important;
+  }
+
+  .loklok-card {
+    flex: 0 0 105px !important;
+    width: 105px !important;
+  }
+
+  .card-poster-wrap {
+    height: 155px !important;
+  }
+
+  .card-poster-title {
+    font-size: 0.65rem !important;
+  }
+
+  .logo-text {
+    display: none !important;
+  }
+
+  .top-navbar {
+    gap: 0.25rem !important;
+  }
+
+  .hero-banner {
+    min-height: 150px !important;
+  }
+
+  .hero-title-text {
+    font-size: 0.88rem !important;
+  }
+
+  .hero-buttons .btn {
+    font-size: 0.65rem !important;
+    padding: 0.35rem 0.55rem !important;
+  }
+
+  .shelf-title {
+    font-size: 0.75rem !important;
+  }
+
+  .category-toolbar {
+    padding: 0.4rem 0.45rem !important;
+    gap: 0.35rem !important;
+  }
+
+  .filter-pill {
+    font-size: 0.65rem !important;
+    padding: 0.22rem 0.4rem !important;
+  }
+
+  .detail-cover {
+    width: 85px !important;
+    height: 128px !important;
+  }
+
+  .detail-info h2 {
+    font-size: 0.9rem !important;
+  }
+
+  .mobile-nav-item {
+    font-size: 0.5rem !important;
+    gap: 1px !important;
+  }
+}
+
+/* ══════════════════════════════════════════
+   LANDSCAPE PHONES (rotated, ≤500px height)
+   ══════════════════════════════════════════ */
+@media (orientation: landscape) and (max-height: 500px) {
+  .top-navbar {
+    height: 40px !important;
+    padding: 0.2rem 0.5rem !important;
+  }
+
+  .mobile-bottom-nav {
+    display: none !important;
+  }
+
+  .main-view {
+    padding-bottom: 0.5rem !important;
+  }
+
+  /* Player takes full viewport in landscape */
+  .player-modal-container,
+  .psb-container {
+    border-radius: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    top: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+  }
+
+  .hero-banner {
+    min-height: 120px !important;
+  }
+
+  /* Reduce shelf spacing */
+  .content-shelf {
+    margin-bottom: 0.5rem !important;
+  }
+
+  .shelf-header {
+    margin-bottom: 0.5rem !important;
+  }
+}
+
+/* ══════════════════════════════════════════
+   MODERN VIEWPORT UNITS (dvh fallback)
+   ══════════════════════════════════════════ */
+@supports (height: 100dvh) {
+  .player-modal-container {
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+  }
+}
+

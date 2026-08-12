@@ -385,28 +385,343 @@ function updatePageTitleAndUrl(media, epName = null) {
 
 function resetPageTitleAndUrl() {
   document.title = 'WOX-Stream';
-  if (window.location.search && (window.location.search.includes('play=') || window.location.search.includes('id='))) {
+  if (window.location.pathname !== '/' && window.location.pathname !== '/index.html') {
+    history.pushState({}, '', '/');
+  } else if (window.location.search) {
     history.pushState({}, '', window.location.pathname);
   }
 }
 
-function initMovieLinkRouter() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const playId = urlParams.get('play') || urlParams.get('id');
-  const cat = urlParams.get('cat') || urlParams.get('category') || 1;
-
-  if (playId) {
-    openDetailModal(playId, cat);
+// ══════════════════════════════════════════
+// SPA ROUTER ENGINE
+// ══════════════════════════════════════════
+window.navigateTo = function(pathStr, push = true) {
+  if (push && window.location.pathname + window.location.search !== pathStr) {
+    history.pushState({ path: pathStr }, '', pathStr);
   }
+  handleRoute(pathStr);
+};
+
+window.handleRoute = function(urlStr) {
+  const url = new URL(urlStr || window.location.href, window.location.origin);
+  const pathname = url.pathname;
+  const search = url.searchParams;
+
+  // 1. Full-bleed watch route: /watch/:id/:epIndex or /watch/:id
+  if (pathname.startsWith('/watch/')) {
+    const parts = pathname.replace('/watch/', '').split('/');
+    const mediaId = parts[0];
+    const epIndex = parseInt(parts[1] || '0', 10);
+    if (mediaId) {
+      openTheaterView(mediaId, isNaN(epIndex) ? 0 : epIndex);
+      return;
+    }
+  }
+
+  // 2. Title detail route: /title/:id
+  if (pathname.startsWith('/title/')) {
+    const parts = pathname.replace('/title/', '').split('/');
+    const mediaId = parts[0];
+    if (mediaId) {
+      if (state.isTheaterView) exitTheaterView();
+      openDetailModal(mediaId);
+      return;
+    }
+  }
+
+  // 3. Fallback query parameters: ?play=:id or ?id=:id
+  const playId = search.get('play') || search.get('id');
+  const epId = search.get('ep');
+  if (playId) {
+    if (epId !== null) {
+      openTheaterView(playId, parseInt(epId || '0', 10));
+    } else {
+      if (state.isTheaterView) exitTheaterView();
+      openDetailModal(playId);
+    }
+    return;
+  }
+
+  // 4. View navigation routes
+  const view = search.get('view') || pathname.replace('/', '');
+  if (state.isTheaterView) exitTheaterView();
+
+  if (view === 'category' || pathname === '/category') {
+    switchNav('category', false);
+  } else if (view === 'calendar' || pathname === '/calendar') {
+    switchNav('calendar', false);
+  } else if (view === 'history' || pathname === '/history') {
+    switchNav('history', false);
+  } else if (view === 'watchlist' || pathname === '/watchlist') {
+    switchNav('watchlist', false);
+  } else if (view === 'profile' || pathname === '/profile') {
+    switchNav('history', false);
+    switchProfileTab('account');
+  } else if (view === 'search' || pathname === '/search') {
+    switchNav('search', false);
+  } else {
+    switchNav('home', false);
+  }
+};
+
+function initMovieLinkRouter() {
+  handleRoute(window.location.pathname + window.location.search);
 }
 
 window.addEventListener('popstate', () => {
+  handleRoute(window.location.pathname + window.location.search);
+});
+
+// ══════════════════════════════════════════
+// NETFLIX-STYLE THEATER PLAYER ENGINE
+// ══════════════════════════════════════════
+let _theaterAmbientTimer = null;
+
+function startTheaterAmbientGlow() {
+  stopTheaterAmbientGlow();
+  const canvas = document.getElementById('theater-ambient-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  _theaterAmbientTimer = setInterval(() => {
+    const video = document.querySelector('#theater-video-mount video') || document.querySelector('#player-container video');
+    if (!video || video.paused || video.ended || !video.videoWidth) return;
+    try {
+      if (canvas.width !== 64) canvas.width = 64;
+      if (canvas.height !== 36) canvas.height = 36;
+      ctx.drawImage(video, 0, 0, 64, 36);
+    } catch (_) {}
+  }, 250);
+}
+
+function stopTheaterAmbientGlow() {
+  if (_theaterAmbientTimer) {
+    clearInterval(_theaterAmbientTimer);
+    _theaterAmbientTimer = null;
+  }
+}
+
+window.openTheaterView = async function(mediaOrId, epIndexOrId = 0) {
+  state.isTheaterView = true;
+
+  const topNav = document.querySelector('.top-navbar');
+  const bottomNav = document.querySelector('.mobile-bottom-nav');
+  if (topNav) topNav.style.display = 'none';
+  if (bottomNav) bottomNav.style.display = 'none';
+
+  const viewTheater = document.getElementById('view-theater');
+  if (viewTheater) viewTheater.style.display = 'flex';
+
   const detailModal = document.getElementById('modal-detail');
-  const playerModal = document.getElementById('modal-player');
-  if (playerModal && playerModal.classList.contains('active')) {
-    closePlayerModal();
-  } else if (detailModal && detailModal.classList.contains('active')) {
-    closeModal('modal-detail');
+  if (detailModal) {
+    detailModal.classList.remove('active');
+    detailModal.style.display = 'none';
+  }
+
+  let media = (typeof mediaOrId === 'object' && mediaOrId) ? mediaOrId : null;
+  const mediaId = media ? media.id : String(mediaOrId);
+
+  if (!media) {
+    try {
+      const res = await fetch(`/api/detail?id=${encodeURIComponent(mediaId)}`);
+      const data = await res.json();
+      if (data.success && data.data) media = data.data;
+    } catch (_) {}
+  }
+
+  if (!media) {
+    showToast('Failed to load media details for theater view.');
+    exitTheaterView();
+    return;
+  }
+
+  state.currentMedia = media;
+  let epList = media.episodes || media.episodeList || [];
+  if (epList.length === 0) {
+    epList = [{ id: mediaId + '_ep1', number: 1, name: 'Full Feature / Episode 1' }];
+  }
+
+  let targetEp = null;
+  if (typeof epIndexOrId === 'number') {
+    targetEp = epList[epIndexOrId] || epList[0];
+  } else {
+    targetEp = epList.find(e => String(e.id) === String(epIndexOrId) || String(e.number) === String(epIndexOrId)) || epList[0];
+  }
+
+  const epIndex = epList.indexOf(targetEp);
+  const epNumber = targetEp.number || (epIndex + 1);
+
+  const titleEl = document.getElementById('theater-title-text');
+  const subEl = document.getElementById('theater-subtitle-text');
+  if (titleEl) titleEl.innerText = media.title || media.name || 'WOX-Stream';
+  if (subEl) subEl.innerText = targetEp.name ? `Ep ${epNumber}: ${targetEp.name}` : `Episode ${epNumber}`;
+
+  document.title = `Watching ${media.title || 'Media'} Ep ${epNumber} — WOX-Stream`;
+  const watchUrl = `/watch/${mediaId}/${epIndex}`;
+  if (window.location.pathname !== watchUrl) {
+    history.pushState({ theater: true, mediaId, epIndex }, '', watchUrl);
+  }
+
+  populateTheaterDrawer(media, epList, targetEp);
+
+  const originalMount = document.getElementById('plyr-video-mount');
+  const theaterMount = document.getElementById('theater-video-mount');
+
+  await playEpisode(media, targetEp);
+
+  if (theaterMount && originalMount && originalMount.children.length > 0) {
+    theaterMount.innerHTML = '';
+    while (originalMount.firstChild) {
+      theaterMount.appendChild(originalMount.firstChild);
+    }
+  }
+
+  startTheaterAmbientGlow();
+};
+
+window.exitTheaterView = function() {
+  state.isTheaterView = false;
+  const viewTheater = document.getElementById('view-theater');
+  if (viewTheater) viewTheater.style.display = 'none';
+
+  const topNav = document.querySelector('.top-navbar');
+  const bottomNav = document.querySelector('.mobile-bottom-nav');
+  if (topNav) topNav.style.display = 'flex';
+  if (bottomNav) bottomNav.style.display = 'flex';
+
+  stopTheaterAmbientGlow();
+
+  if (state.currentMedia && state.currentMedia.id) {
+    openDetailModal(state.currentMedia.id);
+  } else {
+    resetPageTitleAndUrl();
+    switchNav('home');
+  }
+};
+
+window.toggleTheaterAmbientGlow = function() {
+  const canvas = document.getElementById('theater-ambient-canvas');
+  const btn = document.getElementById('btn-theater-glow-toggle');
+  if (!canvas) return;
+
+  if (canvas.style.display === 'none') {
+    canvas.style.display = 'block';
+    if (btn) { btn.innerText = '✨ Glow ON'; btn.style.color = '#38bdf8'; }
+    startTheaterAmbientGlow();
+  } else {
+    canvas.style.display = 'none';
+    if (btn) { btn.innerText = '✨ Glow OFF'; btn.style.color = 'var(--text-muted)'; }
+    stopTheaterAmbientGlow();
+  }
+};
+
+window.toggleTheaterDrawer = function(e) {
+  if (e) e.stopPropagation();
+  const drawer = document.getElementById('theater-drawer');
+  if (!drawer) return;
+  drawer.style.display = (drawer.style.display === 'flex' || drawer.style.display === 'block') ? 'none' : 'flex';
+};
+
+window.switchTheaterDrawerTab = function(tabName) {
+  const epTab = document.getElementById('tdrawer-tab-episodes');
+  const relTab = document.getElementById('tdrawer-tab-related');
+  const epContent = document.getElementById('tdrawer-content-episodes');
+  const relContent = document.getElementById('tdrawer-content-related');
+
+  if (tabName === 'episodes') {
+    if (epTab) epTab.classList.add('active');
+    if (relTab) relTab.classList.remove('active');
+    if (epContent) epContent.style.display = 'block';
+    if (relContent) relContent.style.display = 'none';
+  } else {
+    if (relTab) relTab.classList.add('active');
+    if (epTab) epTab.classList.remove('active');
+    if (relContent) relContent.style.display = 'block';
+    if (epContent) epContent.style.display = 'none';
+  }
+};
+
+function populateTheaterDrawer(media, epList, currentEp) {
+  const grid = document.getElementById('tdrawer-episodes-grid');
+  if (grid && epList.length > 0) {
+    grid.innerHTML = epList.map((e, idx) => {
+      const isCur = String(e.id) === String(currentEp.id);
+      const epNum = e.number || (idx + 1);
+      return `
+        <button class="btn btn-glass" onclick="openTheaterView('${media.id}', ${idx})" style="padding:0.45rem; font-size:0.78rem; font-weight:700; ${isCur ? 'border-color:var(--neon-cyan); background:rgba(0,255,255,0.25); color:#00ffff;' : 'color:#fff;'}">
+          Ep ${epNum}
+        </button>
+      `;
+    }).join('');
+  }
+
+  const relList = document.getElementById('tdrawer-related-list');
+  const related = media.relatedList || media.recommendations || [];
+  if (relList) {
+    if (related.length === 0) {
+      relList.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;text-align:center;">No related content available.</p>';
+    } else {
+      relList.innerHTML = related.map(item => `
+        <div class="psb-related-card" onclick="openTheaterView('${item.id}', 0)">
+          <img class="psb-related-img" src="${item.cover || item.coverVerticalUrl}" alt="${escapeHtml(item.title)}" onerror="handleImgError(this)">
+          <div class="psb-related-info">
+            <div class="psb-related-title">${escapeHtml(item.title || item.name)}</div>
+            <div class="psb-related-meta">★ ${item.score || '8.5'} • ${item.domainType || 'HD'}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+  }
+}
+
+// Theater Keyboard Shortcuts
+document.addEventListener('keydown', (e) => {
+  if (state.isTheaterView) {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+    const video = document.querySelector('#theater-video-mount video') || document.querySelector('#player-container video');
+    if (!video) return;
+
+    switch (e.key.toLowerCase()) {
+      case ' ':
+      case 'k':
+        e.preventDefault();
+        if (video.paused) video.play(); else video.pause();
+        break;
+      case 'f':
+        e.preventDefault();
+        if (document.fullscreenElement) document.exitFullscreen();
+        else video.requestFullscreen().catch(() => {});
+        break;
+      case 'm':
+        e.preventDefault();
+        video.muted = !video.muted;
+        showToast(video.muted ? '🔇 Muted' : '🔊 Unmuted');
+        break;
+      case 'arrowleft':
+        e.preventDefault();
+        video.currentTime = Math.max(0, video.currentTime - 10);
+        showToast('⏪ -10s');
+        break;
+      case 'arrowright':
+        e.preventDefault();
+        video.currentTime = Math.min(video.duration || 0, video.currentTime + 10);
+        showToast('⏩ +10s');
+        break;
+      case 'arrowup':
+        e.preventDefault();
+        video.volume = Math.min(1, video.volume + 0.1);
+        showToast(`🔊 Volume: ${Math.round(video.volume * 100)}%`);
+        break;
+      case 'arrowdown':
+        e.preventDefault();
+        video.volume = Math.max(0, video.volume - 0.1);
+        showToast(`🔉 Volume: ${Math.round(video.volume * 100)}%`);
+        break;
+      case 'escape':
+        e.preventDefault();
+        exitTheaterView();
+        break;
+    }
   }
 });
 
@@ -2578,7 +2893,19 @@ window.switchProfileTab = async function(tabName) {
 
           <!-- Account Details Form Card -->
           <div style="grid-column:1/-1;background:var(--bg-card);border:1px solid var(--border-glass);border-radius:16px;padding:2rem;">
-            <h3 style="font-size:1.25rem;font-weight:700;margin-bottom:1.5rem;color:#fff;">Account & Profile Settings</h3>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem;">
+              <h3 style="font-size:1.25rem;font-weight:700;color:#fff;margin:0;">Account & Profile Settings</h3>
+              ${state.token ? `<button onclick="handleDeleteAccount()" style="background:rgba(244,63,94,0.12);border:1px solid rgba(244,63,94,0.4);color:#f43f5e;padding:0.4rem 0.85rem;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;">⚠️ Delete Account</button>` : ''}
+            </div>
+
+            <!-- Avatar Row -->
+            <div style="margin-bottom:1.25rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-glass);padding-bottom:1rem;">
+              <span style="color:var(--text-muted);font-size:0.95rem;">Profile Avatar</span>
+              <div style="display:flex;align-items:center;gap:0.85rem;">
+                <img src="${u.avatar || u.portrait || SVG_FALLBACK}" alt="Avatar" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--neon-cyan);">
+                <button onclick="handleUploadAvatar()" style="background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.3);color:#38bdf8;padding:0.3rem 0.75rem;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;">Change Avatar</button>
+              </div>
+            </div>
             
             <div style="margin-bottom:1.25rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border-glass);padding-bottom:1rem;">
               <span style="color:var(--text-muted);font-size:0.95rem;">Username</span>
@@ -2602,6 +2929,101 @@ window.switchProfileTab = async function(tabName) {
         </div>
       `;
     }
+  }
+};
+
+window.handleChangePassword = async function() {
+  if (!state.token) {
+    showToast('Please log in to change your password.');
+    openModal('modal-login');
+    return;
+  }
+  const oldPassword = prompt('🔑 Enter your CURRENT password:');
+  if (!oldPassword) return;
+  const newPassword = prompt('🔒 Enter your NEW password (min 6 characters):');
+  if (!newPassword || newPassword.length < 6) {
+    showToast('New password must be at least 6 characters.');
+    return;
+  }
+  try {
+    const res = await fetch('/api/auth?action=change_password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', token: state.token },
+      body: JSON.stringify({ oldPassword, newPassword })
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (data.token) {
+        state.token = data.token;
+        localStorage.setItem('loklok_token', data.token);
+      }
+      showToast('✅ Password changed successfully!');
+    } else {
+      showToast('❌ Failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch (err) {
+    showToast('❌ Request error: ' + err.message);
+  }
+};
+
+window.handleUploadAvatar = async function() {
+  if (!state.token) {
+    showToast('Please log in to update your avatar.');
+    openModal('modal-login');
+    return;
+  }
+  const avatarUrl = prompt('🖼️ Enter image URL for your avatar (or paste base64 data URI):', state.user?.avatar || '');
+  if (!avatarUrl || !avatarUrl.trim()) return;
+
+  try {
+    const res = await fetch('/api/auth?action=upload_avatar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', token: state.token },
+      body: JSON.stringify({ avatar: avatarUrl.trim() })
+    });
+    const data = await res.json();
+    if (data.success && data.user) {
+      state.user = data.user;
+      localStorage.setItem('loklok_user', JSON.stringify(data.user));
+      initUserUI();
+      if (typeof switchProfileTab === 'function') switchProfileTab('account');
+      showToast('✅ Avatar updated successfully!');
+    } else {
+      showToast('❌ Failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch (err) {
+    showToast('❌ Request error: ' + err.message);
+  }
+};
+
+window.handleDeleteAccount = async function() {
+  if (!state.token) {
+    showToast('No active account session to delete.');
+    return;
+  }
+  const confirmText = prompt('⚠️ DANGER: Deleting your account will permanently wipe your profile, history, collection, and appointments!\n\nType your password to confirm account deletion:');
+  if (!confirmText) return;
+
+  try {
+    const res = await fetch('/api/auth?action=delete_account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', token: state.token },
+      body: JSON.stringify({ password: confirmText })
+    });
+    const data = await res.json();
+    if (data.success) {
+      localStorage.removeItem('loklok_token');
+      localStorage.removeItem('loklok_user');
+      state.token = '';
+      state.user = null;
+      initUserUI();
+      switchNav('home');
+      showToast('🗑️ Account permanently deleted.');
+    } else {
+      showToast('❌ Delete failed: ' + (data.error || 'Incorrect password'));
+    }
+  } catch (err) {
+    showToast('❌ Request error: ' + err.message);
   }
 };
 
