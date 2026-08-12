@@ -3870,7 +3870,7 @@ function initUserUI() {
   } else {
     if (logoutContainer) logoutContainer.style.display = 'none';
     userArea.innerHTML = `
-      <button class="btn btn-primary" onclick="openLoginModal()">Sign In</button>
+      <button class="btn btn-primary" id="nav-btn-login" onclick="openLoginModal()" style="white-space:nowrap;font-weight:700;">LOGIN</button>
     `;
     const profileHeader = document.getElementById('profile-header-container');
     if (profileHeader) profileHeader.innerHTML = '';
@@ -5063,7 +5063,7 @@ function renderHomeFeedData(data) {
       <div class="shelf-container">
         <div class="shelf-header">
           <h2 class="shelf-title">${escapeHtml(section.title)} <span style="font-size:1rem;color:var(--text-dim);">&gt;</span></h2>
-          <button class="shelf-switch-btn" onclick="loadHomeFeed(true)">Switch 🔄</button>
+          <button class="shelf-switch-btn" onclick="loadHomeFeed(true)" title="Shuffle & refresh home feed recommendations">Shuffle 🔄</button>
         </div>
         <div class="card-grid">
           ${filteredItems.map((item, idx) => renderLoklokCard(item, idx < 6)).join('')}
@@ -5086,7 +5086,7 @@ async function loadHomeFeed(forceRefresh = false) {
   container.innerHTML = '<div class="spinner"></div>';
 
   try {
-    const res = await fetch(`/api/home?allowAdult=${String(state.settings.allowAdult || false)}&token=${encodeURIComponent(state.token)}`);
+    const res = await fetch(`/api/home?allowAdult=${String(state.settings.allowAdult || false)}&token=${encodeURIComponent(state.token)}${forceRefresh ? '&shuffle=true' : ''}`);
     const data = await res.json();
 
     if (!data.success || !data.sections || data.sections.length === 0) {

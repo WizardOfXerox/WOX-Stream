@@ -12,17 +12,20 @@ module.exports = async (req, res) => {
   try {
     const page = req.query.page || 0;
     const token = req.headers.token || req.query.token || '';
+    const isShuffle = req.query.shuffle === 'true' || req.query.forceRefresh === 'true';
     const allowAdultParam = req.query.allowAdult || (req.headers ? req.headers.allowadult : '') || '';
-    const cacheKey = `home_v14_${page}_${allowAdultParam === 'true' ? 'adult' : 'safe'}_${req.query.source || 'all'}`;
+    const cacheKey = `home_v15_${page}_${allowAdultParam === 'true' ? 'adult' : 'safe'}_${req.query.source || 'all'}`;
 
-    // Return from memory cache if fresh (< 60 seconds)
-    const cached = homeCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp < HOME_CACHE_TTL)) {
-      res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
-      return res.status(200).json(cached.data);
+    // Return from memory cache if fresh (< 60 seconds) and not shuffling
+    if (!isShuffle) {
+      const cached = homeCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp < HOME_CACHE_TTL)) {
+        res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
+        return res.status(200).json(cached.data);
+      }
     }
 
-    const resultSections = [];
+    const rawSections = [];
     const headers = getLoklokHeaders(token);
 
     // 1. Fetch Official Loklok App Home Recommendations & Shelves
@@ -69,10 +72,10 @@ module.exports = async (req, res) => {
               if (validItems.length > 0) {
                 const rawTitle = shelf.homeSectionName || shelf.title;
                 const shelfTitle = rawTitle ? rawTitle.toUpperCase() : (idx === 0 ? '🔥 TRENDING LOKLOK PREMIERES' : `LOKLOK FEATURED SELECTION ${idx}`);
-                resultSections.push({
+                rawSections.push({
                   title: shelfTitle,
                   type: 'LOKLOK_SHELF',
-                  items: robustDeduplicate(validItems).slice(0, 18)
+                  items: robustDeduplicate(validItems)
                 });
               }
             }
@@ -88,10 +91,10 @@ module.exports = async (req, res) => {
       if (Array.isArray(hwShelves) && hwShelves.length > 0) {
         hwShelves.forEach(shelf => {
           if (shelf && shelf.items && shelf.items.length > 0) {
-            resultSections.push({
+            rawSections.push({
               title: shelf.title || '🌟 HOLLYWOOD CINEMA & SERIES',
               type: 'HOLLYWOOD_SHELF',
-              items: robustDeduplicate(shelf.items).slice(0, 18)
+              items: robustDeduplicate(shelf.items)
             });
           }
         });
@@ -109,7 +112,7 @@ module.exports = async (req, res) => {
       };
       await nartoFetch(nartoReq, nartoRes);
       if (nartoItems.length > 0) {
-        resultSections.push({
+        rawSections.push({
           title: '💎 ASIAN SHORT DRAMAS (BILLIONAIRE & REVENGE)',
           type: 'NARTO_SHELF',
           items: robustDeduplicate(nartoItems.map(nItem => ({
@@ -122,12 +125,12 @@ module.exports = async (req, res) => {
             sourceName: 'Narto Drama',
             sourceKey: 'narto',
             isNarto: true
-          }))).slice(0, 18)
+          })))
         });
       }
     } catch (_) {}
 
-    // 4. Ultra-rich COMING SOON & UPCOMING RELEASES shelf
+    // 4. Upcoming Releases Shelf
     const upcomingList = [
       { id: maskId('hollywood', 'm_671'), category: '0', title: "Harry Potter and the Philosopher's Stone (4K Remaster)", cover: fixCoverUrl('https://image.tmdb.org/t/p/w500/wuMc08IPKEatf9rnMNXvIDxqP4W.jpg'), score: '9.5', releaseDate: 'Coming Dec 2026', domainType: 'MOVIE', sourceName: 'Upcoming Premiere', sourceKey: 'upcoming' },
       { id: maskId('anime', 'sakamoto_days_s1'), category: '1', title: 'Sakamoto Days (Season 1)', cover: fixCoverUrl('https://image.tmdb.org/t/p/w500/wRpCqsJFyKNuh5FMegNPrhzp2NF.jpg'), score: '9.2', releaseDate: 'Coming Jan 2026', domainType: 'TV', sourceName: 'Upcoming Premiere', sourceKey: 'upcoming' },
@@ -141,7 +144,7 @@ module.exports = async (req, res) => {
       { id: maskId('hollywood', 'm_1003596'), category: '0', title: 'Avengers: Doomsday', cover: fixCoverUrl('https://image.tmdb.org/t/p/w500/bh2OuKvq19jBHsloUVCfPSZZw81.jpg'), score: '9.9', releaseDate: 'Coming May 2026', domainType: 'MOVIE', sourceName: 'Upcoming Premiere', sourceKey: 'upcoming' }
     ];
 
-    resultSections.splice(2, 0, {
+    rawSections.splice(2, 0, {
       title: '⏳ COMING SOON & UPCOMING RELEASES',
       type: 'COMING_SOON_SECTION',
       items: upcomingList
@@ -163,15 +166,52 @@ module.exports = async (req, res) => {
 
         const dedupedAdult = robustDeduplicate(combined);
         if (dedupedAdult.length > 0) {
-          resultSections.push({ title: '🔞 TRENDING ADULT ANIME (18+)', type: 'ADULT_SECTION', items: dedupedAdult });
+          rawSections.push({ title: '🔞 TRENDING ADULT ANIME (18+)', type: 'ADULT_SECTION', items: dedupedAdult });
         }
       } catch (_) {}
     }
 
-    // Build featured Banners from the top items of the shelves
+    // 6. GLOBAL CROSS-SECTION DEDUPLICATION (Zero Repeated Titles Across Homepage)
+    const globalSeenIds = new Set();
+    const globalSeenTitles = new Set();
+    const resultSections = [];
+
+    for (const section of rawSections) {
+      if (!section || !Array.isArray(section.items)) continue;
+      let items = section.items.filter(item => {
+        if (!item || !item.title) return false;
+        const normTitle = (item.title || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        const idKey = String(item.id || '');
+
+        if (idKey && globalSeenIds.has(idKey)) return false;
+        if (normTitle && globalSeenTitles.has(normTitle)) return false;
+
+        if (idKey) globalSeenIds.add(idKey);
+        if (normTitle) globalSeenTitles.add(normTitle);
+        return true;
+      });
+
+      if (isShuffle) {
+        items = items.sort(() => Math.random() - 0.5);
+      }
+
+      if (items.length > 0) {
+        resultSections.push({
+          ...section,
+          items: items.slice(0, 18)
+        });
+      }
+    }
+
+    // Build featured Banners from top deduplicated items
     const allShelvesItems = resultSections.flatMap(s => s.items || []);
-    const bannerPool = robustDeduplicate(allShelvesItems).slice(0, 10);
-    const banners = bannerPool.map((item, idx) => ({
+    let bannerPool = robustDeduplicate(allShelvesItems);
+
+    if (isShuffle) {
+      bannerPool = bannerPool.sort(() => Math.random() - 0.5);
+    }
+
+    const banners = bannerPool.slice(0, 10).map((item, idx) => ({
       id: item.id,
       category: item.category || '0',
       title: item.title,
@@ -189,14 +229,15 @@ module.exports = async (req, res) => {
       banners: banners
     };
 
-    // Save to Memory Cache
-    homeCache.set(cacheKey, { timestamp: Date.now(), data: responsePayload });
-    if (homeCache.size > 20) {
-      const oldestKey = homeCache.keys().next().value;
-      homeCache.delete(oldestKey);
+    if (!isShuffle) {
+      homeCache.set(cacheKey, { timestamp: Date.now(), data: responsePayload });
+      if (homeCache.size > 20) {
+        const oldestKey = homeCache.keys().next().value;
+        homeCache.delete(oldestKey);
+      }
     }
 
-    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
+    res.setHeader('Cache-Control', isShuffle ? 'no-cache' : 'public, s-maxage=60, stale-while-revalidate=120');
     return res.status(200).json(responsePayload);
   } catch (error) {
     return res.status(500).json({ success: false, error: error.message });

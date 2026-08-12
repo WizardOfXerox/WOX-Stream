@@ -338,10 +338,12 @@
           <div class="category-toolbar">
             <h2 class="shelf-title" id="category-title">Category</h2>
             <div class="category-toolbar-search">
-              <span class="category-search-icon">🔍</span>
-              <input type="text" id="category-search-input" class="search-input" placeholder="Search within source & category..." onkeydown="if(event.key==='Enter') triggerCategorySearch()">
-              <button class="category-search-btn" onclick="triggerCategorySearch()">Search</button>
-              <button class="category-clear-btn" id="btn-clear-category-search" onclick="clearCategorySearch()" style="display: none;">✕</button>
+              <div class="search-input-wrap">
+                <span class="category-search-icon">🔍</span>
+                <input type="text" id="category-search-input" class="search-input" placeholder="Search within source & category..." onkeydown="if(event.key==='Enter') triggerCategorySearch()">
+                <button class="category-clear-btn" id="btn-clear-category-search" onclick="clearCategorySearch()" style="display: none;">✕</button>
+              </div>
+              <button class="category-search-btn" onclick="triggerCategorySearch()">SEARCH</button>
             </div>
             <button class="category-collapse-btn expanded" id="collapse-btn" onclick="toggleFilterOptions()" title="Toggle filter options">
               <span class="collapse-icon">⚙</span>
