@@ -2714,15 +2714,18 @@ window.switchProfileTab = async function(tabName) {
   if (activeBtn) activeBtn.classList.add('active');
 
   const historyGrid = document.getElementById('history-grid');
+  const historyControls = document.getElementById('history-controls-bar');
   const profileSubContent = document.getElementById('profile-sub-content');
 
   if (tabName === 'history') {
-    historyGrid.style.display = 'grid';
-    profileSubContent.style.display = 'none';
+    if (historyGrid) historyGrid.style.display = 'grid';
+    if (historyControls) historyControls.style.display = 'flex';
+    if (profileSubContent) profileSubContent.style.display = 'none';
     loadHistory(true);
   } else {
-    historyGrid.style.display = 'none';
-    profileSubContent.style.display = 'block';
+    if (historyGrid) historyGrid.style.display = 'none';
+    if (historyControls) historyControls.style.display = 'none';
+    if (profileSubContent) profileSubContent.style.display = 'block';
 
     if (tabName === 'appointment') {
       profileSubContent.innerHTML = '<div class="spinner"></div>';
