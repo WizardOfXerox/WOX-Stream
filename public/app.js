@@ -3570,7 +3570,7 @@ window.loadHistory = async function(quiet = false) {
         }
         if (hasUpdates) {
           localStorage.setItem('loklok_watch_history', JSON.stringify(combined));
-          if (typeof renderHistoryView === 'function') {
+          if (typeof renderHistoryView === 'function' && (!state.activeProfileTab || state.activeProfileTab === 'history')) {
             renderHistoryView();
           }
         }
@@ -4055,12 +4055,12 @@ window.switchNav = function(viewName, pushUrl = true) {
   }
 };
 
-// Automatic Background Cloud Sync for Authenticated Accounts (every 15s)
+// Automatic Background Cloud Sync for Authenticated Accounts (every 30s when history tab is active)
 setInterval(() => {
-  if (state.token && typeof loadHistory === 'function') {
+  if (state.token && state.activeNav === 'history' && (!state.activeProfileTab || state.activeProfileTab === 'history')) {
     try { loadHistory(true); } catch (_) {}
   }
-}, 15000);
+}, 30000);
 
 window.loadWeeklyCalendar = async function() {
   const tabsContainer = document.getElementById('calendar-day-tabs');
